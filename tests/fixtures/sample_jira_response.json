@@ -1,0 +1,117 @@
+[
+  {
+    "id": "100001",
+    "key": "RHOAIENG-12345",
+    "fields": {
+      "summary": "Implement model serving autoscaling",
+      "status": {"name": "In Progress"},
+      "priority": {"name": "Major"},
+      "components": [
+        {"name": "Model as a Service"},
+        {"name": "AI Core Dashboard"}
+      ],
+      "fixVersions": [
+        {"name": "RHOAI 3.5"}
+      ],
+      "issuelinks": [
+        {
+          "type": {
+            "inward": "is required by",
+            "outward": "requires"
+          },
+          "inwardIssue": {
+            "key": "RHAIRFE-100",
+            "fields": {
+              "status": {"name": "Approved"}
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "100002",
+    "key": "RHOAIENG-12346",
+    "fields": {
+      "summary": "Dashboard latency improvements",
+      "status": {"name": "New"},
+      "priority": {"name": "Critical"},
+      "components": [
+        {"name": "AI Core Dashboard"}
+      ],
+      "fixVersions": [],
+      "issuelinks": []
+    }
+  },
+  {
+    "id": "100003",
+    "key": "RHOAIENG-12347",
+    "fields": {
+      "summary": "Add GPU memory monitoring",
+      "status": {"name": "Done"},
+      "priority": {"name": "Minor"},
+      "components": [],
+      "fixVersions": [],
+      "issuelinks": []
+    }
+  },
+  {
+    "id": "100004",
+    "key": "RHAIRFE-200",
+    "fields": {
+      "summary": "RFE: Support multi-model deployments",
+      "status": {"name": "New"},
+      "priority": {"name": "Major"},
+      "components": [
+        {"name": "MaaS"}
+      ],
+      "fixVersions": [],
+      "issuelinks": []
+    }
+  },
+  {
+    "id": "100005",
+    "key": "RHOAIENG-12348",
+    "fields": {
+      "summary": "Integrate tool calling with vLLM runtime",
+      "status": {"name": "In Progress"},
+      "priority": {"name": "Blocker"},
+      "components": [
+        {"name": "vLLM Runtime"},
+        {"name": "AI Core Platform"}
+      ],
+      "fixVersions": [
+        {"name": "3.5"}
+      ],
+      "issuelinks": [
+        {
+          "type": {
+            "inward": "is required by",
+            "outward": "requires"
+          },
+          "outwardIssue": {
+            "key": "RHAIRFE-300",
+            "fields": {
+              "status": {"name": "Draft"}
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "100006",
+    "key": "RHOAIENG-12349",
+    "fields": {
+      "summary": "Multimodal inference pipeline support",
+      "status": {"name": "To Do"},
+      "priority": {"name": "Major"},
+      "components": [
+        {"name": "vLLM Runtime"},
+        {"name": "vLLM"}
+      ],
+      "fixVersions": [],
+      "issuelinks": []
+    }
+  }
+]

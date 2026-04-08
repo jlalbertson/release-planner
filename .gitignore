@@ -1,0 +1,22 @@
+# Runtime data (user-specific)
+data/overrides.yaml
+data/field_mapping.yaml
+
+# Google service account credentials
+*.json
+!config/*.json
+!tests/fixtures/*.json
+
+# Environment
+.env
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp

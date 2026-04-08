@@ -1,0 +1,32 @@
+# data/overrides.example.yaml
+# Manual overrides for fields not available in Jira.
+# Keyed by Jira issue key. Only specified fields are overridden.
+# Copy this file to data/overrides.yaml and customize.
+
+# Override Jira-sourced fields:
+# RHOAIENG-12345:
+#   pm: "Jane Doe"
+#   architect: "John Smith"
+#   delivery_owner: "Alice Johnson"
+#   team: "Platform"
+#   phase: "GA"
+#   ranking: 1
+#   risk_flag: "At Risk"
+#   refinement_complete: "Yes"
+#   refinement_notes: "Reviewed in sprint 14"
+#   comments: "Depends on upstream vLLM 0.8"
+#   rice_score: 85.0
+
+# RFE-only entries discovered by Pass 3 can also have overrides:
+# RHAIRFE-456:
+#   pm: "Bob Wilson"
+#   phase: "EA1"
+
+# Issues with no Jira key at all (manual entries) use a synthetic key:
+# MANUAL-001:
+#   big_rock: "MaaS"
+#   summary: "External model catalog GA readiness"
+#   priority: "Major"
+#   phase: "GA"
+#   pm: "Jane Doe"
+#   source: "manual"

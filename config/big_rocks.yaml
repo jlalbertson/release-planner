@@ -1,0 +1,300 @@
+# config/big_rocks.yaml
+release: "3.5"
+
+# fixVersion variants are used by Pass 1 (committed issues).
+# The pipeline appends: AND fixVersion IN ({fix_versions})
+# to each rock's base JQL for Pass 1 only.
+fix_versions:
+  - "RHOAI {release}"
+  - "RHOAI-{release}"
+  - "{release}"
+  - "{release}.0"
+  - "RHAIIS-{release}"
+
+# Project scope for all queries
+projects: "RHAISTRAT, RHAIRFE, AIPCC, KONFLUX, RHOAIENG, PSX"
+
+big_rocks:
+  - priority: 1
+    name: "MaaS"
+    full_name: "MaaS (continue from 3.4)"
+    pillar: "Inference"
+    state: "continue from 3.4"
+    components:
+      - "Model as a Service"
+      - "MaaS"
+      - "AI Core Dashboard"
+    jql: >-
+      project in ({projects})
+      AND component in ("Model as a Service", "MaaS", "AI Core Dashboard")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("Model as a Service", "MaaS", "AI Core Dashboard")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 2
+    name: "Gen AI Studio"
+    full_name: "Gen AI Studio (continue from 3.4)"
+    pillar: "Agents"
+    state: "continue from 3.4"
+    components:
+      - "Gen AI Studio"
+      - "AI Core Dashboard"
+      - "RAG + Vector DB"
+    jql: >-
+      project in ({projects})
+      AND component in ("Gen AI Studio", "AI Core Dashboard", "RAG + Vector DB")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("Gen AI Studio", "AI Core Dashboard", "RAG + Vector DB")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 3
+    name: "Prompt Lab"
+    full_name: "Prompt Lab (continue from 3.4)"
+    pillar: "Agents"
+    state: "continue from 3.4"
+    components:
+      - "Prompt Lab"
+    jql: >-
+      project in ({projects})
+      AND component = "Prompt Lab"
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component = "Prompt Lab"
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 4
+    name: "AgentOps"
+    full_name: "AgentOps (continue from 3.4)"
+    pillar: "Agents"
+    state: "continue from 3.4"
+    components:
+      - "AgentOps"
+      - "Llama Stack Core"
+    jql: >-
+      project in ({projects})
+      AND component in ("AgentOps", "Llama Stack Core")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("AgentOps", "Llama Stack Core")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 5
+    name: "BYO Agent"
+    full_name: "BYO Agent (continue from 3.4)"
+    pillar: "Agents"
+    state: "continue from 3.4"
+    components:
+      - "AgentDev"
+    jql: >-
+      project in ({projects})
+      AND component = "AgentDev"
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component = "AgentDev"
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 6
+    name: "Tool Calling Support"
+    full_name: "Tool Calling Support (new for 3.5)"
+    pillar: "Inference"
+    state: "new for 3.5"
+    components:
+      - "AI Core Platform"
+      - "AI Platform DevOps"
+      - "llm-d"
+      - "vLLM Runtime"
+    jql: >-
+      project in ({projects})
+      AND component in ("AI Core Platform", "AI Platform DevOps", "llm-d", "vLLM Runtime")
+      AND (summary ~ "tool call*" OR labels = "tool-calling")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("AI Core Platform", "AI Platform DevOps", "llm-d", "vLLM Runtime")
+      AND (summary ~ "tool call*" OR labels = "tool-calling")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords:
+      - "multimodal"
+      - "multitenan"
+
+  - priority: 7
+    name: "llm-d"
+    full_name: "llm-d (continue from 3.4)"
+    pillar: "Inference"
+    state: "continue from 3.4"
+    components:
+      - "llm-d"
+      - "AI Core Platform"
+      - "Model Serving"
+    jql: >-
+      project in ({projects})
+      AND component in ("llm-d", "AI Core Platform", "Model Serving")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("llm-d", "AI Core Platform", "Model Serving")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords:
+      - "tool call"
+      - "multitenan"
+      - "RBAC"
+
+  - priority: 8
+    name: "Eval Hub"
+    full_name: "Eval Hub (continue from 3.4)"
+    pillar: "Data"
+    state: "continue from 3.4"
+    components:
+      - "Model Eval"
+      - "TrustyAI"
+    jql: >-
+      project in ({projects})
+      AND component in ("Model Eval", "TrustyAI")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("Model Eval", "TrustyAI")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 9
+    name: "AI Hub"
+    full_name: "AI Hub (continue from 3.4)"
+    pillar: "Platform"
+    state: "continue from 3.4"
+    components:
+      - "AI Hub"
+      - "Agentic / MCP"
+    jql: >-
+      project in ({projects})
+      AND component in ("AI Hub", "Agentic / MCP")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("AI Hub", "Agentic / MCP")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 10
+    name: "Observability"
+    full_name: "Observability (continue from 3.4)"
+    pillar: "Platform"
+    state: "continue from 3.4"
+    components:
+      - "Model & Agent Observability"
+      - "Monitoring"
+    jql: >-
+      project in ({projects})
+      AND component in ("Model & Agent Observability", "Monitoring")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("Model & Agent Observability", "Monitoring")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 11
+    name: "Multitenancy"
+    full_name: "Multitenancy (new for 3.5)"
+    pillar: "Platform"
+    state: "new for 3.5"
+    components:
+      - "AI Core Platform"
+    jql: >-
+      project in ({projects})
+      AND component = "AI Core Platform"
+      AND (summary ~ "multitenan*" OR summary ~ "RBAC" OR labels in ("multitenancy", "rbac"))
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component = "AI Core Platform"
+      AND (summary ~ "multitenan*" OR summary ~ "RBAC")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 12
+    name: "AutoRAG"
+    full_name: "AutoRAG (continue from 3.4)"
+    pillar: "Data"
+    state: "continue from 3.4"
+    components:
+      - "AutoRAG"
+      - "RAG"
+    jql: >-
+      project in ({projects})
+      AND component in ("AutoRAG", "RAG")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("AutoRAG", "RAG")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 13
+    name: "AI Safety - Model Validation"
+    full_name: "AI Safety - Model Validation (new for 3.5)"
+    pillar: "Platform"
+    state: "new for 3.5"
+    components:
+      - "AI Safety"
+      - "Model Validation"
+    jql: >-
+      project in ({projects})
+      AND component in ("AI Safety", "Model Validation")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("AI Safety", "Model Validation")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []
+
+  - priority: 14
+    name: "vLLM Multimodal"
+    full_name: "vLLM Multimodal (new for 3.5)"
+    pillar: "Inference"
+    state: "new for 3.5"
+    components:
+      - "vLLM"
+      - "vLLM Runtime"
+    jql: >-
+      project in ({projects})
+      AND component in ("vLLM", "vLLM Runtime")
+      AND (summary ~ "multimodal" OR labels = "multimodal")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("vLLM", "vLLM Runtime")
+      AND (summary ~ "multimodal" OR labels = "multimodal")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords:
+      - "tool call"
+
+  - priority: 15
+    name: "AutoML"
+    full_name: "AutoML (continue from 3.4)"
+    pillar: "Data"
+    state: "continue from 3.4"
+    components:
+      - "AutoX (AutoML)"
+      - "AutoX (Auto ML)"
+    jql: >-
+      project in ({projects})
+      AND component in ("AutoX (AutoML)", "AutoX (Auto ML)")
+      ORDER BY priority ASC, key ASC
+    rfe_jql: >-
+      project = RHAIRFE
+      AND component in ("AutoX (AutoML)", "AutoX (Auto ML)")
+      ORDER BY priority ASC, key ASC
+    exclude_keywords: []

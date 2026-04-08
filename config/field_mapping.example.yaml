@@ -1,0 +1,11 @@
+# config/field_mapping.example.yaml
+# Template for Jira custom field ID mapping.
+# Copy this to data/field_mapping.yaml and fill in actual field IDs.
+# Run `python -m release_planner discover-fields --issue-key RHOAIENG-XXXX` to discover IDs.
+
+target_release: "customfield_12345"    # placeholder -- discover actual ID
+team: "customfield_12346"              # placeholder -- discover actual ID
+pm: "customfield_12347"                # placeholder -- discover actual ID
+architect: "customfield_12348"         # placeholder -- discover actual ID
+delivery_owner: "customfield_12349"    # placeholder -- discover actual ID
+rfe_link_type: "is required by"        # Jira link type for RFE relationships

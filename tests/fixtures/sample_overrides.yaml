@@ -1,0 +1,22 @@
+# Test fixture: sample overrides file
+RHOAIENG-12345:
+  pm: "Jane Doe"
+  architect: "John Smith"
+  delivery_owner: "Alice Johnson"
+  team: "Platform"
+  phase: "GA"
+  ranking: 1
+  risk_flag: "On Track"
+  refinement_complete: "Yes"
+  comments: "Depends on upstream vLLM 0.8"
+
+RHAIRFE-200:
+  pm: "Bob Wilson"
+  phase: "EA1"
+
+MANUAL-001:
+  big_rock: "MaaS"
+  summary: "External model catalog GA readiness"
+  priority: "Major"
+  phase: "GA"
+  pm: "Jane Doe"
