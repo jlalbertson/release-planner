@@ -30,6 +30,7 @@ def run_pipeline(
     big_rocks: list[BigRock],
     field_mapping: dict[str, str],
     overrides: OverrideSet | None,
+    output: str | None = None,
     spreadsheet_id: str | None = None,
     create: bool = False,
     spreadsheet_name: str | None = None,
@@ -43,11 +44,10 @@ def run_pipeline(
 ) -> dict:
     """Execute the full pipeline with three-pass discovery.
 
-    Returns summary dict with candidate counts and spreadsheet URL.
+    Returns summary dict with candidate counts and output path/URL.
     """
     from release_planner.jira_client import JiraClient
     from release_planner.overrides import OverrideLoader
-    from release_planner.sheets_writer import SheetsWriter
 
     if passes is None:
         passes = [1, 2, 3]
@@ -173,16 +173,32 @@ def run_pipeline(
     result = {
         "total_candidates": total_candidates,
         "per_rock": per_rock_stats,
-        "spreadsheet_url": "",
+        "output": "",
     }
 
     if dry_run:
-        click.echo("\n[DRY RUN] Skipping Google Sheets output.")
+        click.echo("\n[DRY RUN] Skipping output.")
         return result
 
-    # Write to Google Sheets
+    # Excel output mode
+    if output:
+        from release_planner.excel_writer import ExcelWriter
+
+        writer = ExcelWriter(
+            big_rocks=active_rocks,
+            candidates=all_candidates,
+            release=release,
+        )
+        abs_path = writer.write(output)
+        result["output"] = abs_path
+        click.echo(f"\nExcel file written: {abs_path}")
+        return result
+
+    # Google Sheets output mode
+    from release_planner.sheets_writer import SheetsWriter
+
     credentials = SheetsWriter.load_credentials()
-    writer = SheetsWriter(
+    sheets_writer = SheetsWriter(
         big_rocks=active_rocks,
         candidates=all_candidates,
         release=release,
@@ -191,16 +207,18 @@ def run_pipeline(
 
     if create:
         title = spreadsheet_name or f"RHOAI {release} Candidates"
-        url = writer.create_and_write(title, share_with=list(share_with) if share_with else None)
+        url = sheets_writer.create_and_write(
+            title, share_with=list(share_with) if share_with else None
+        )
     elif spreadsheet_id:
-        url = writer.write(spreadsheet_id)
+        url = sheets_writer.write(spreadsheet_id)
     else:
         raise click.ClickException(
-            "Must specify --spreadsheet-id, DEFAULT_SPREADSHEET_ID env var, or --create. "
-            "See --help for details."
+            "Must specify --output, --spreadsheet-id, DEFAULT_SPREADSHEET_ID env var, "
+            "or --create. See --help for details."
         )
 
-    result["spreadsheet_url"] = url
+    result["output"] = url
     click.echo(f"\nSpreadsheet URL: {url}")
     return result
 
@@ -287,9 +305,16 @@ def main():
     multiple=True,
     help="Email addresses to share newly created spreadsheet with (repeatable)",
 )
+@click.option(
+    "-o",
+    "--output",
+    default=None,
+    type=click.Path(),
+    help="Write to a local Excel (.xlsx) file instead of Google Sheets",
+)
 @click.option("--config-dir", default="./config", help="Config directory")
 @click.option("--data-dir", default="./data", help="Data directory (overrides, field mapping)")
-@click.option("--dry-run", is_flag=True, help="Query Jira but don't write to Google Sheets")
+@click.option("--dry-run", is_flag=True, help="Query Jira but skip output")
 @click.option(
     "--rocks",
     multiple=True,
@@ -313,6 +338,7 @@ def generate(
     spreadsheet_name,
     create,
     share_with,
+    output,
     config_dir,
     data_dir,
     dry_run,
@@ -322,9 +348,14 @@ def generate(
     duplicate_mode,
     verbose,
 ):
-    """Generate the release planning spreadsheet in Google Sheets."""
+    """Generate the release planning spreadsheet.
+
+    Outputs to a local Excel file (--output) or Google Sheets (--spreadsheet-id / --create).
+    """
+    # Only require Google credentials if outputting to Google Sheets
+    require_google = not dry_run and not output
     try:
-        settings = Settings.from_env(require_google=not dry_run)
+        settings = Settings.from_env(require_google=require_google)
     except RuntimeError as e:
         raise click.ClickException(str(e)) from e
 
@@ -370,10 +401,10 @@ def generate(
     effective_spreadsheet_id = spreadsheet_id or settings.default_spreadsheet_id
 
     # Validate that we have a target
-    if not create and not effective_spreadsheet_id and not dry_run:
+    if not output and not create and not effective_spreadsheet_id and not dry_run:
         raise click.ClickException(
-            "Must specify --spreadsheet-id, set DEFAULT_SPREADSHEET_ID env var, or use --create. "
-            "Run with --dry-run to skip output."
+            "Must specify --output, --spreadsheet-id, set DEFAULT_SPREADSHEET_ID env var, "
+            "or use --create. Run with --dry-run to skip output."
         )
 
     # Run the pipeline
@@ -383,6 +414,7 @@ def generate(
             big_rocks=big_rocks_list,
             field_mapping=field_mapping,
             overrides=overrides,
+            output=output,
             spreadsheet_id=effective_spreadsheet_id,
             create=create,
             spreadsheet_name=spreadsheet_name,
@@ -397,7 +429,7 @@ def generate(
     except click.ClickException:
         raise
     except Exception as e:
-        logger.exception("Pipeline failed")
+        logger.error("Pipeline failed: %s", e)
         raise click.ClickException(f"Pipeline error: {e}") from e
 
 

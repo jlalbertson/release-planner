@@ -30,6 +30,10 @@ class BigRock(BaseModel):
             "JQL for RFE-based discovery from RHAIRFE project. Use {release} placeholder."
         ),
     )
+    issue_keys: list[str] = Field(
+        default_factory=list,
+        description="Curated list of Jira issue keys for this rock (skips JQL discovery when set)",
+    )
     exclude_keywords: list[str] = Field(
         default_factory=list,
         description="Keywords to exclude from results to disambiguate shared components",

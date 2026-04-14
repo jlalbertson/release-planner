@@ -7,7 +7,6 @@ class CandidateColumn(StrEnum):
     """Column headers for the {release} Candidates worksheet, in order."""
 
     BIG_ROCK = "Big Rock"
-    RANKING = "1-n Ranking"
     ISSUE_KEY = "Issue key"
     ISSUE_STATUS = "Issue status"
     PRIORITY = "Priority"
@@ -34,10 +33,8 @@ class BigRockColumn(StrEnum):
 
     PILLAR = "Pillar"
     PRIORITY = "Priority"
-    COMPONENT = "Component"
-    OUTCOME = "Outcome"
+    BIG_ROCK = "Big Rock"
     STATE = "State"
-    DESCRIPTION = "Description"
     OWNER = "Owner"
     NOTES = "Notes"
 
@@ -51,7 +48,6 @@ BIG_ROCK_COLUMNS: list[str] = [col.value for col in BigRockColumn]
 # Column widths in pixels for the Candidates worksheet
 CANDIDATE_COLUMN_WIDTHS: dict[str, int] = {
     CandidateColumn.BIG_ROCK: 150,
-    CandidateColumn.RANKING: 75,
     CandidateColumn.ISSUE_KEY: 135,
     CandidateColumn.ISSUE_STATUS: 110,
     CandidateColumn.PRIORITY: 90,
@@ -77,10 +73,8 @@ CANDIDATE_COLUMN_WIDTHS: dict[str, int] = {
 BIG_ROCK_COLUMN_WIDTHS: dict[str, int] = {
     BigRockColumn.PILLAR: 150,
     BigRockColumn.PRIORITY: 75,
-    BigRockColumn.COMPONENT: 260,
-    BigRockColumn.OUTCOME: 300,
+    BigRockColumn.BIG_ROCK: 260,
     BigRockColumn.STATE: 150,
-    BigRockColumn.DESCRIPTION: 375,
     BigRockColumn.OWNER: 150,
     BigRockColumn.NOTES: 300,
 }

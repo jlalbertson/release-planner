@@ -5,24 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "release-planner"
 version = "0.1.0"
-description = "RHOAI release planning spreadsheet generator (outputs to Google Sheets)"
+description = "RHOAI release planning spreadsheet generator (outputs to Excel and Google Sheets)"
 requires-python = ">=3.11"
 dependencies = [
-    "jira>=3.8",
-    "gspread>=6.0",
-    "google-auth>=2.0",
-    "click>=8.1",
-    "pydantic>=2.0",
-    "pyyaml>=6.0",
-    "python-dotenv>=1.0",
+    "jira>=3.8,<4",
+    "gspread>=6.0,<7",
+    "google-auth>=2.0,<3",
+    "click>=8.1,<9",
+    "pydantic>=2.0,<3",
+    "pyyaml>=6.0,<7",
+    "python-dotenv>=1.0,<2",
+    "openpyxl>=3.1,<4",
 ]
 
 [project.optional-dependencies]
-import = [
-    "openpyxl>=3.1",  # Required only for the import-xlsx command (reads .xlsx input)
-]
 dev = [
-    "openpyxl>=3.1",  # Needed for import-xlsx tests
     "pytest>=8.0",
     "pytest-mock>=3.12",
     "pytest-cov>=5.0",

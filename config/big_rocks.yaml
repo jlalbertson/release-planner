@@ -20,6 +20,7 @@ big_rocks:
     full_name: "MaaS (continue from 3.4)"
     pillar: "Inference"
     state: "continue from 3.4"
+    owner: "Pat Johnson"
     components:
       - "Model as a Service"
       - "MaaS"
@@ -39,6 +40,7 @@ big_rocks:
     full_name: "Gen AI Studio (continue from 3.4)"
     pillar: "Agents"
     state: "continue from 3.4"
+    owner: "Morgan Lee"
     components:
       - "Gen AI Studio"
       - "AI Core Dashboard"
@@ -58,6 +60,7 @@ big_rocks:
     full_name: "Prompt Lab (continue from 3.4)"
     pillar: "Agents"
     state: "continue from 3.4"
+    owner: "Morgan Lee"
     components:
       - "Prompt Lab"
     jql: >-
@@ -75,6 +78,7 @@ big_rocks:
     full_name: "AgentOps (continue from 3.4)"
     pillar: "Agents"
     state: "continue from 3.4"
+    owner: "Chris Anderson"
     components:
       - "AgentOps"
       - "Llama Stack Core"
@@ -93,6 +97,7 @@ big_rocks:
     full_name: "BYO Agent (continue from 3.4)"
     pillar: "Agents"
     state: "continue from 3.4"
+    owner: "Chris Anderson"
     components:
       - "AgentDev"
     jql: >-
@@ -110,6 +115,7 @@ big_rocks:
     full_name: "Tool Calling Support (new for 3.5)"
     pillar: "Inference"
     state: "new for 3.5"
+    owner: "Robin Carter, Dana Flores"
     components:
       - "AI Core Platform"
       - "AI Platform DevOps"
@@ -134,6 +140,7 @@ big_rocks:
     full_name: "llm-d (continue from 3.4)"
     pillar: "Inference"
     state: "continue from 3.4"
+    owner: "Alex Rivera"
     components:
       - "llm-d"
       - "AI Core Platform"
@@ -156,6 +163,7 @@ big_rocks:
     full_name: "Eval Hub (continue from 3.4)"
     pillar: "Data"
     state: "continue from 3.4"
+    owner: "Jordan Taylor"
     components:
       - "Model Eval"
       - "TrustyAI"
@@ -174,6 +182,7 @@ big_rocks:
     full_name: "AI Hub (continue from 3.4)"
     pillar: "Platform"
     state: "continue from 3.4"
+    owner: "Casey Martin"
     components:
       - "AI Hub"
       - "Agentic / MCP"
@@ -192,6 +201,7 @@ big_rocks:
     full_name: "Observability (continue from 3.4)"
     pillar: "Platform"
     state: "continue from 3.4"
+    owner: "Pat Johnson"
     components:
       - "Model & Agent Observability"
       - "Monitoring"
@@ -210,6 +220,7 @@ big_rocks:
     full_name: "Multitenancy (new for 3.5)"
     pillar: "Platform"
     state: "new for 3.5"
+    owner: "Jamie Brooks"
     components:
       - "AI Core Platform"
     jql: >-
@@ -229,6 +240,7 @@ big_rocks:
     full_name: "AutoRAG (continue from 3.4)"
     pillar: "Data"
     state: "continue from 3.4"
+    owner: "Sam Patel"
     components:
       - "AutoRAG"
       - "RAG"
@@ -247,6 +259,7 @@ big_rocks:
     full_name: "AI Safety - Model Validation (new for 3.5)"
     pillar: "Platform"
     state: "new for 3.5"
+    owner: "Robin Carter, Chris Anderson, Casey Martin"
     components:
       - "AI Safety"
       - "Model Validation"
@@ -265,6 +278,7 @@ big_rocks:
     full_name: "vLLM Multimodal (new for 3.5)"
     pillar: "Inference"
     state: "new for 3.5"
+    owner: "Dana Flores"
     components:
       - "vLLM"
       - "vLLM Runtime"
@@ -286,6 +300,7 @@ big_rocks:
     full_name: "AutoML (continue from 3.4)"
     pillar: "Data"
     state: "continue from 3.4"
+    owner: "Taylor Chen"
     components:
       - "AutoX (AutoML)"
       - "AutoX (Auto ML)"

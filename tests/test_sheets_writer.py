@@ -79,9 +79,9 @@ class TestSheetsWriter:
         mock_ws.update.assert_called_once()
         rows = mock_ws.update.call_args[0][0]
 
-        # Header should have 21 columns
+        # Header should have 20 columns
         assert len(rows[0]) == len(CANDIDATE_COLUMNS)
-        assert len(rows[0]) == 21
+        assert len(rows[0]) == 20
 
     def test_candidates_worksheet_header_order(self, writer_with_data):
         writer, _, mock_spreadsheet, mock_ws, _ = writer_with_data
@@ -91,8 +91,8 @@ class TestSheetsWriter:
         rows = mock_ws.update.call_args[0][0]
         header = rows[0]
         assert header[0] == "Big Rock"
-        assert header[1] == "1-n Ranking"
-        assert header[2] == "Issue key"
+        assert header[1] == "Issue key"
+        assert header[2] == "Issue status"
         assert header[-1] == "RICE Score"
 
     def test_candidates_data_rows(self, writer_with_data, sample_candidates):
@@ -112,7 +112,7 @@ class TestSheetsWriter:
         mock_ws.update.assert_called_once()
         rows = mock_ws.update.call_args[0][0]
         assert len(rows[0]) == len(BIG_ROCK_COLUMNS)
-        assert len(rows[0]) == 8
+        assert len(rows[0]) == 6
 
     def test_big_rocks_worksheet_header_order(self, writer_with_data):
         writer, _, mock_spreadsheet, _, mock_ws = writer_with_data

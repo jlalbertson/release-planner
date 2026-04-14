@@ -2,10 +2,16 @@
 data/overrides.yaml
 data/field_mapping.yaml
 
+# Generated spreadsheets
+*.xlsx
+
 # Google service account credentials
 *.json
 !config/*.json
 !tests/fixtures/*.json
+config/*service*account*.json
+config/*credentials*.json
+config/*sa-key*.json
 
 # Environment
 .env
@@ -20,3 +26,6 @@ build/
 .idea/
 .vscode/
 *.swp
+
+# Claude Code
+.claude/

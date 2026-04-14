@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import gspread
@@ -32,8 +33,11 @@ class SheetsWriter:
     # Required OAuth scopes for Sheets API
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",  # needed for --create and --share-with
+        "https://www.googleapis.com/auth/drive.file",  # needed for --create and --share-with
     ]
+
+    # Pattern for valid Jira issue keys
+    _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
 
     # Jira browse URL base for hyperlinks
     JIRA_BROWSE_URL = "https://issues.redhat.com/browse"
@@ -148,31 +152,13 @@ class SheetsWriter:
         rows.append(list(BIG_ROCK_COLUMNS))
 
         for rock in self._big_rocks:
-            rock_candidates = self._candidates.get(rock.name, [])
-            # Count by source_pass
-            committed = sum(1 for c in rock_candidates if c.source_pass == "committed")
-            candidate_count = sum(1 for c in rock_candidates if c.source_pass == "candidate")
-            rfe_count = sum(1 for c in rock_candidates if c.source_pass == "rfe")
-            manual_count = sum(1 for c in rock_candidates if c.source_pass == "manual")
-            total = len(rock_candidates)
-
-            notes_parts = []
-            if rock.notes:
-                notes_parts.append(rock.notes)
-            notes_parts.append(
-                f"Total: {total} (committed: {committed}, "
-                f"candidate: {candidate_count}, rfe: {rfe_count}, manual: {manual_count})"
-            )
-
             row: list[str | int | float | None] = [
                 rock.pillar,
                 rock.priority,
-                ", ".join(rock.components),
-                rock.outcome,
+                rock.name,
                 rock.state,
-                rock.description,
                 rock.owner,
-                " | ".join(notes_parts),
+                "",  # Notes left blank for now
             ]
             rows.append(row)
 
@@ -501,29 +487,41 @@ class SheetsWriter:
             else:
                 comments = f"[source: {candidate.source_pass}]"
 
+        s = self._sanitize_cell
         return [
             candidate.big_rock,
-            candidate.ranking if candidate.ranking is not None else "",
             issue_key_cell,
             candidate.status,
             candidate.priority,
             candidate.phase,
-            candidate.summary,
-            candidate.team,
-            candidate.components,
+            s(candidate.summary),
+            s(candidate.team),
+            s(candidate.components),
             candidate.target_release,
             rfe_cell,
             candidate.rfe_status,
-            candidate.pm,
-            candidate.architect,
-            candidate.delivery_owner,
+            s(candidate.pm),
+            s(candidate.architect),
+            s(candidate.delivery_owner),
             candidate.risk_flag,
-            candidate.change_log,
+            s(candidate.change_log),
             candidate.refinement_complete,
-            candidate.refinement_notes,
-            comments,
+            s(candidate.refinement_notes),
+            s(comments),
             candidate.rice_score if candidate.rice_score is not None else "",
         ]
+
+    @staticmethod
+    def _sanitize_cell(value: str) -> str:
+        """Sanitize a string value to prevent formula injection in Google Sheets.
+
+        Values starting with =, +, -, or @ could be interpreted as formulas
+        when written with USER_ENTERED mode. Prefix with a single quote to force
+        text interpretation.
+        """
+        if isinstance(value, str) and value and value[0] in ("=", "+", "-", "@"):
+            return f"'{value}"
+        return value
 
     def _build_hyperlink_formula(self, issue_key: str) -> str:
         """Return a =HYPERLINK() formula for a Jira issue key.
@@ -532,10 +530,13 @@ class SheetsWriter:
             issue_key: Jira issue key (e.g. RHOAIENG-12345).
 
         Returns:
-            Google Sheets HYPERLINK formula string.
+            Google Sheets HYPERLINK formula string, or plain text if key is invalid.
         """
         if not issue_key:
             return ""
+        if not self._ISSUE_KEY_RE.match(issue_key):
+            logger.warning("Invalid issue key format, skipping hyperlink: %s", issue_key)
+            return issue_key
         url = f"{self.JIRA_BROWSE_URL}/{issue_key}"
         return f'=HYPERLINK("{url}", "{issue_key}")'
 

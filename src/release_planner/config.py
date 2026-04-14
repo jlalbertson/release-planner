@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -21,9 +21,9 @@ class Settings:
     """Application settings loaded from environment variables."""
 
     jira_server: str = JIRA_SERVER_DEFAULT
-    jira_token: str = ""
+    jira_token: str = field(default="", repr=False)
     google_credentials_file: str | None = None
-    google_credentials_json: str | None = None
+    google_credentials_json: str | None = field(default=None, repr=False)
     default_spreadsheet_id: str | None = None
     config_dir: str = "./config"
     data_dir: str = "./data"

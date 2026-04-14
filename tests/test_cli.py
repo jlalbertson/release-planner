@@ -51,7 +51,8 @@ class TestValidateConfig:
 class TestGenerateCommand:
     """Tests for the generate CLI command."""
 
-    def test_generate_missing_jira_token(self, runner, monkeypatch):
+    @patch("release_planner.config.load_dotenv")
+    def test_generate_missing_jira_token(self, _mock_dotenv, runner, monkeypatch):
         monkeypatch.delenv("RELEASE_PLANNER_JIRA_TOKEN", raising=False)
         monkeypatch.delenv("JIRA_TOKEN", raising=False)
         monkeypatch.delenv("GOOGLE_CREDENTIALS_FILE", raising=False)
@@ -61,7 +62,8 @@ class TestGenerateCommand:
         assert result.exit_code != 0
         assert "RELEASE_PLANNER_JIRA_TOKEN" in result.output
 
-    def test_generate_missing_google_credentials(self, runner, monkeypatch):
+    @patch("release_planner.config.load_dotenv")
+    def test_generate_missing_google_credentials(self, _mock_dotenv, runner, monkeypatch):
         monkeypatch.setenv("RELEASE_PLANNER_JIRA_TOKEN", "test-token")
         monkeypatch.delenv("GOOGLE_CREDENTIALS_FILE", raising=False)
         monkeypatch.delenv("GOOGLE_CREDENTIALS_JSON", raising=False)
@@ -224,7 +226,8 @@ class TestGenerateCommand:
 class TestDiscoverFields:
     """Tests for the discover-fields CLI command."""
 
-    def test_discover_fields_missing_token(self, runner, monkeypatch):
+    @patch("release_planner.config.load_dotenv")
+    def test_discover_fields_missing_token(self, _mock_dotenv, runner, monkeypatch):
         monkeypatch.delenv("RELEASE_PLANNER_JIRA_TOKEN", raising=False)
         monkeypatch.delenv("JIRA_TOKEN", raising=False)
         monkeypatch.delenv("GOOGLE_CREDENTIALS_FILE", raising=False)

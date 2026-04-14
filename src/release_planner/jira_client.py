@@ -375,6 +375,74 @@ class JiraClient:
 
         return result
 
+    # Exclude closed/resolved statuses from all queries
+    _CLOSED_STATUSES = ("Closed", "Done", "Resolved", "Cancelled")
+
+    @staticmethod
+    def _append_open_status_filter(jql: str) -> str:
+        """Append a status filter to exclude closed issues from a JQL query."""
+        closed_list = ", ".join(f'"{s}"' for s in JiraClient._CLOSED_STATUSES)
+        clause = f"status NOT IN ({closed_list})"
+        # Insert before ORDER BY if present
+        upper = jql.upper()
+        if "ORDER BY" in upper:
+            idx = upper.index("ORDER BY")
+            return f"{jql[:idx].rstrip()} AND {clause} {jql[idx:]}"
+        return f"{jql} AND {clause}"
+
+    def fetch_issues_by_keys(
+        self,
+        issue_keys: list[str],
+        big_rock_name: str,
+        seen_keys: set[str] | None = None,
+    ) -> list[Candidate]:
+        """Fetch specific Jira issues by key and return mapped Candidates.
+
+        Used when a BigRock has a curated issue_keys list from planning slides
+        instead of JQL-based discovery.
+
+        Args:
+            issue_keys: List of Jira issue keys to fetch.
+            big_rock_name: Name of the BigRock these candidates belong to.
+            seen_keys: Set of issue keys already discovered by higher-priority rocks.
+
+        Returns:
+            List of Candidate models.
+        """
+        if seen_keys is None:
+            seen_keys = set()
+
+        # Filter out already-seen keys
+        keys_to_fetch = [k for k in issue_keys if k not in seen_keys]
+        if not keys_to_fetch:
+            logger.info("  All %d issue keys already seen, skipping", len(issue_keys))
+            return []
+
+        # Fetch in batches using key IN (...) JQL
+        candidates: list[Candidate] = []
+        batch_size = 50  # JQL IN clause limit
+
+        for i in range(0, len(keys_to_fetch), batch_size):
+            batch = keys_to_fetch[i : i + batch_size]
+            quoted = ", ".join(f'"{k}"' for k in batch)
+            jql = f"key IN ({quoted})"
+
+            try:
+                issues = self.search_issues(jql)
+                for issue in issues:
+                    candidate = self.map_to_candidate(issue, big_rock_name, "curated")
+                    candidates.append(candidate)
+            except RuntimeError as e:
+                logger.warning("  Failed to fetch batch of %d keys: %s", len(batch), e)
+
+        logger.info(
+            "  Fetched %d of %d curated issues for %s",
+            len(candidates),
+            len(keys_to_fetch),
+            big_rock_name,
+        )
+        return candidates
+
     def fetch_candidates_for_rock(
         self,
         rock: BigRock,
@@ -384,6 +452,9 @@ class JiraClient:
         seen_keys: set[str] | None = None,
     ) -> list[Candidate]:
         """Execute three-pass discovery for a rock and return mapped Candidates.
+
+        If the rock has a curated issue_keys list, fetches those directly instead
+        of running JQL discovery passes.
 
         Args:
             rock: BigRock definition with jql, rfe_jql, exclude_keywords.
@@ -396,6 +467,11 @@ class JiraClient:
         Returns:
             List of Candidate models, each tagged with source_pass.
         """
+        # Use curated issue_keys if available
+        if rock.issue_keys:
+            logger.info("  Using curated issue_keys (%d keys)", len(rock.issue_keys))
+            return self.fetch_issues_by_keys(rock.issue_keys, rock.name, seen_keys)
+
         if passes is None:
             passes = [1, 2, 3]
         if seen_keys is None:
@@ -417,6 +493,7 @@ class JiraClient:
                 base_jql = base_jql[:idx].rstrip()
 
             pass1_jql = f"{base_jql} AND fixVersion IN ({quoted_versions}) {order_by}"
+            pass1_jql = self._append_open_status_filter(pass1_jql)
 
             try:
                 issues = self.search_issues(pass1_jql)
@@ -435,7 +512,8 @@ class JiraClient:
             logger.info("  Pass 2 (candidates): %s", rock.name)
             pass2_count = 0
             try:
-                issues = self.search_issues(rock.jql)
+                pass2_jql = self._append_open_status_filter(rock.jql)
+                issues = self.search_issues(pass2_jql)
                 for issue in issues:
                     key = issue.key
                     if key not in seen_keys and key not in rock_keys:
@@ -461,7 +539,8 @@ class JiraClient:
             logger.info("  Pass 3 (RFE): %s", rock.name)
             pass3_count = 0
             try:
-                issues = self.search_issues(rock.rfe_jql)
+                pass3_jql = self._append_open_status_filter(rock.rfe_jql)
+                issues = self.search_issues(pass3_jql)
                 for issue in issues:
                     key = issue.key
                     if key not in seen_keys and key not in rock_keys:
