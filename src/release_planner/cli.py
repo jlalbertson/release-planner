@@ -75,6 +75,7 @@ def run_pipeline(
     jira_client = JiraClient(
         server=settings.jira_server,
         token=settings.jira_token,
+        email=settings.jira_email,
         field_mapping=field_mapping,
         query_delay=settings.query_delay,
     )
@@ -450,6 +451,7 @@ def discover_fields(issue_key, verbose):
     client = JiraClient(
         server=settings.jira_server,
         token=settings.jira_token,
+        email=settings.jira_email,
         query_delay=settings.query_delay,
     )
 

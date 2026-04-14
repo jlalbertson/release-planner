@@ -91,7 +91,7 @@ class TestSheetsWriter:
         rows = mock_ws.update.call_args[0][0]
         header = rows[0]
         assert header[0] == "Big Rock"
-        assert header[1] == "Issue key"
+        assert header[1] == "Feature"
         assert header[2] == "Issue status"
         assert header[-1] == "RICE Score"
 

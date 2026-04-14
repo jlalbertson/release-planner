@@ -21,25 +21,28 @@ logger = logging.getLogger(__name__)
 
 
 class JiraClient:
-    """Client for Jira Server/DC using PAT authentication."""
+    """Client for Jira Server/DC (PAT) or Jira Cloud (email + API token)."""
 
     def __init__(
         self,
         server: str = JIRA_SERVER_DEFAULT,
         token: str = "",
+        email: str | None = None,
         field_mapping: dict[str, str] | None = None,
         query_delay: float = JIRA_QUERY_DELAY_DEFAULT,
     ):
-        """Initialize with server URL, PAT, custom field mapping, and rate limit delay.
+        """Initialize with server URL, credentials, custom field mapping, and rate limit delay.
 
         Args:
-            server: Jira Server/DC URL (e.g. https://issues.redhat.com)
-            token: Personal Access Token for authentication
+            server: Jira URL (e.g. https://issues.redhat.com or https://redhat.atlassian.net)
+            token: PAT (Server/DC) or API token (Cloud)
+            email: Email for Jira Cloud basic auth. If set, uses basic_auth instead of token_auth.
             field_mapping: Custom field ID mapping (from data/field_mapping.yaml)
             query_delay: Seconds to wait between API calls (default 1.0)
         """
         self._server = server
         self._token = token
+        self._email = email
         self._field_mapping = field_mapping or {}
         self._query_delay = query_delay
         self._last_query_time: float = 0.0
@@ -48,11 +51,20 @@ class JiraClient:
     def connect(self) -> None:
         """Establish connection to Jira. Raises RuntimeError on auth failure."""
         try:
-            self._jira = JIRA(
-                server=self._server,
-                token_auth=self._token,
-                timeout=JIRA_REQUEST_TIMEOUT,
-            )
+            if self._email:
+                # Jira Cloud: email + API token via basic auth
+                self._jira = JIRA(
+                    server=self._server,
+                    basic_auth=(self._email, self._token),
+                    timeout=JIRA_REQUEST_TIMEOUT,
+                )
+            else:
+                # Jira Server/DC: PAT via token auth
+                self._jira = JIRA(
+                    server=self._server,
+                    token_auth=self._token,
+                    timeout=JIRA_REQUEST_TIMEOUT,
+                )
             # Test connection by fetching server info
             self._jira.server_info()
             logger.info("Connected to Jira at %s", self._server)
@@ -77,6 +89,10 @@ class JiraClient:
     def search_issues(self, jql: str, max_results: int = JIRA_MAX_RESULTS_PER_QUERY) -> list[Any]:
         """Execute JQL and return raw Jira issue objects. Respects rate limiting.
 
+        Uses enhanced_search_issues on Jira Cloud (required since the legacy
+        search API is deprecated) and falls back to the classic search_issues
+        on Jira Server/DC.
+
         Args:
             jql: JQL query string.
             max_results: Maximum number of results to return.
@@ -89,6 +105,48 @@ class JiraClient:
 
         logger.debug("Executing JQL: %s (max_results=%d)", jql, max_results)
 
+        if jira._is_cloud:
+            return self._search_issues_cloud(jira, jql, max_results)
+        return self._search_issues_server(jira, jql, max_results)
+
+    def _search_issues_cloud(
+        self, jira: JIRA, jql: str, max_results: int
+    ) -> list[Any]:
+        """Execute JQL using the Cloud enhanced_search_issues API (token-paginated).
+
+        Pass maxResults=0 to let the library auto-paginate through all results,
+        then truncate to our max_results cap.
+        """
+        for attempt in range(1, JIRA_RETRY_COUNT + 1):
+            try:
+                # maxResults=0 tells the jira library to fetch ALL pages
+                # (the Cloud API caps at 100/page, so a positive value only
+                # fetches a single page). We truncate to our own cap afterward.
+                results = jira.enhanced_search_issues(
+                    jql,
+                    maxResults=0,
+                )
+                issues = list(results)
+                if len(issues) > max_results:
+                    logger.warning(
+                        "Hit max_results cap (%d). There may be more issues matching the query.",
+                        max_results,
+                    )
+                    issues = issues[:max_results]
+                logger.info("JQL returned %d issues (Cloud)", len(issues))
+                return issues
+            except JIRAError as e:
+                if not self._handle_jira_error(e, jql, attempt):
+                    raise
+            except Exception as e:
+                if not self._handle_connection_error(e, attempt):
+                    raise
+        return []  # unreachable, but satisfies type checker
+
+    def _search_issues_server(
+        self, jira: JIRA, jql: str, max_results: int
+    ) -> list[Any]:
+        """Execute JQL using the Server/DC search_issues API (offset-paginated)."""
         all_issues: list[Any] = []
         start_at = 0
         page_size = min(100, max_results)
@@ -106,57 +164,13 @@ class JiraClient:
                     )
                     break
                 except JIRAError as e:
-                    if e.status_code == 429:
-                        retry_after = self._get_retry_after(e)
-                        logger.warning(
-                            "Rate limited (429). Waiting %ds before retry %d/%d",
-                            retry_after,
-                            attempt,
-                            JIRA_RETRY_COUNT,
-                        )
-                        time.sleep(retry_after)
-                        continue
-                    if e.status_code == 400:
-                        logger.error("Bad JQL query (400): %s\nJQL: %s", e.text, jql)
-                        raise RuntimeError(
-                            f"Invalid JQL query. Check component names and syntax.\n"
-                            f"JQL: {jql}\nError: {e.text}"
-                        ) from e
-                    if e.status_code in (401, 403):
-                        raise RuntimeError(
-                            f"Jira authentication failed (HTTP {e.status_code}). "
-                            "Check that your PAT is valid and not expired."
-                        ) from e
-                    if attempt < JIRA_RETRY_COUNT:
-                        wait_time = 2**attempt
-                        logger.warning(
-                            "Jira error (HTTP %s), retrying in %ds (%d/%d): %s",
-                            e.status_code,
-                            wait_time,
-                            attempt,
-                            JIRA_RETRY_COUNT,
-                            e.text,
-                        )
-                        time.sleep(wait_time)
-                        continue
-                    raise RuntimeError(
-                        f"Jira query failed after {JIRA_RETRY_COUNT} retries: {e}"
-                    ) from e
+                    if not self._handle_jira_error(e, jql, attempt):
+                        raise
+                    continue
                 except Exception as e:
-                    if attempt < JIRA_RETRY_COUNT:
-                        wait_time = 2**attempt
-                        logger.warning(
-                            "Connection error, retrying in %ds (%d/%d): %s",
-                            wait_time,
-                            attempt,
-                            JIRA_RETRY_COUNT,
-                            e,
-                        )
-                        time.sleep(wait_time)
-                        continue
-                    raise RuntimeError(
-                        f"Jira query failed after {JIRA_RETRY_COUNT} retries: {e}"
-                    ) from e
+                    if not self._handle_connection_error(e, attempt):
+                        raise
+                    continue
 
             all_issues.extend(results)
 
@@ -173,8 +187,64 @@ class JiraClient:
                 max_results,
             )
 
-        logger.info("JQL returned %d issues", len(all_issues))
+        logger.info("JQL returned %d issues (Server/DC)", len(all_issues))
         return all_issues
+
+    def _handle_jira_error(self, e: JIRAError, jql: str, attempt: int) -> bool:
+        """Handle a JIRAError during search. Returns True if the caller should retry."""
+        if e.status_code == 429:
+            retry_after = self._get_retry_after(e)
+            logger.warning(
+                "Rate limited (429). Waiting %ds before retry %d/%d",
+                retry_after,
+                attempt,
+                JIRA_RETRY_COUNT,
+            )
+            time.sleep(retry_after)
+            return True
+        if e.status_code == 400:
+            logger.error("Bad JQL query (400): %s\nJQL: %s", e.text, jql)
+            raise RuntimeError(
+                f"Invalid JQL query. Check component names and syntax.\n"
+                f"JQL: {jql}\nError: {e.text}"
+            ) from e
+        if e.status_code in (401, 403):
+            raise RuntimeError(
+                f"Jira authentication failed (HTTP {e.status_code}). "
+                "Check that your PAT is valid and not expired."
+            ) from e
+        if attempt < JIRA_RETRY_COUNT:
+            wait_time = 2**attempt
+            logger.warning(
+                "Jira error (HTTP %s), retrying in %ds (%d/%d): %s",
+                e.status_code,
+                wait_time,
+                attempt,
+                JIRA_RETRY_COUNT,
+                e.text,
+            )
+            time.sleep(wait_time)
+            return True
+        raise RuntimeError(
+            f"Jira query failed after {JIRA_RETRY_COUNT} retries: {e}"
+        ) from e
+
+    def _handle_connection_error(self, e: Exception, attempt: int) -> bool:
+        """Handle a non-Jira exception during search. Returns True if the caller should retry."""
+        if attempt < JIRA_RETRY_COUNT:
+            wait_time = 2**attempt
+            logger.warning(
+                "Connection error, retrying in %ds (%d/%d): %s",
+                wait_time,
+                attempt,
+                JIRA_RETRY_COUNT,
+                e,
+            )
+            time.sleep(wait_time)
+            return True
+        raise RuntimeError(
+            f"Jira query failed after {JIRA_RETRY_COUNT} retries: {e}"
+        ) from e
 
     def map_to_candidate(
         self,
@@ -401,6 +471,11 @@ class JiraClient:
         Used when a BigRock has a curated issue_keys list from planning slides
         instead of JQL-based discovery.
 
+        Post-processing:
+        - Filters out RHAIRFE issues in a closed state.
+        - For approved RHAIRFE issues with a Cloners link to a RHAISTRAT,
+          fetches and includes the linked RHAISTRAT as a feature candidate.
+
         Args:
             issue_keys: List of Jira issue keys to fetch.
             big_rock_name: Name of the BigRock these candidates belong to.
@@ -418,9 +493,9 @@ class JiraClient:
             logger.info("  All %d issue keys already seen, skipping", len(issue_keys))
             return []
 
-        # Fetch in batches using key IN (...) JQL
-        candidates: list[Candidate] = []
-        batch_size = 50  # JQL IN clause limit
+        # Fetch raw issues in batches
+        raw_issues: list[Any] = []
+        batch_size = 50
 
         for i in range(0, len(keys_to_fetch), batch_size):
             batch = keys_to_fetch[i : i + batch_size]
@@ -428,20 +503,108 @@ class JiraClient:
             jql = f"key IN ({quoted})"
 
             try:
-                issues = self.search_issues(jql)
-                for issue in issues:
-                    candidate = self.map_to_candidate(issue, big_rock_name, "curated")
-                    candidates.append(candidate)
+                raw_issues.extend(self.search_issues(jql))
             except RuntimeError as e:
                 logger.warning("  Failed to fetch batch of %d keys: %s", len(batch), e)
 
+        # Process raw issues: filter closed RFEs, collect linked STRATs
+        candidates: list[Candidate] = []
+        linked_strat_keys: list[str] = []
+        fetched_keys: set[str] = set()
+
+        for issue in raw_issues:
+            key = issue.key
+            status = ""
+            if hasattr(issue.fields, "status") and issue.fields.status:
+                status = issue.fields.status.name
+
+            # Skip closed RHAIRFE issues
+            if key.startswith("RHAIRFE-") and status in self._CLOSED_STATUSES:
+                logger.info("    Skipping closed RFE: %s (%s)", key, status)
+                continue
+
+            # For approved RHAIRFE issues, find linked RHAISTRAT via Cloners link
+            if key.startswith("RHAIRFE-"):
+                strat_key = self._get_cloned_strat_key(issue)
+                if strat_key and strat_key not in seen_keys:
+                    linked_strat_keys.append(strat_key)
+
+            candidate = self.map_to_candidate(issue, big_rock_name, "curated")
+            candidates.append(candidate)
+            fetched_keys.add(key)
+
+        # Fetch linked RHAISTRAT issues for approved RFEs
+        strat_keys_to_fetch = [
+            k
+            for k in dict.fromkeys(linked_strat_keys)  # dedupe, preserve order
+            if k not in seen_keys and k not in fetched_keys
+        ]
+        if strat_keys_to_fetch:
+            logger.info(
+                "    Fetching %d linked STRATs for approved RFEs", len(strat_keys_to_fetch)
+            )
+            for i in range(0, len(strat_keys_to_fetch), batch_size):
+                batch = strat_keys_to_fetch[i : i + batch_size]
+                quoted = ", ".join(f'"{k}"' for k in batch)
+                jql = f"key IN ({quoted})"
+
+                try:
+                    strat_issues = self.search_issues(jql)
+                    for issue in strat_issues:
+                        candidate = self.map_to_candidate(issue, big_rock_name, "curated")
+                        candidates.append(candidate)
+                        fetched_keys.add(issue.key)
+                        logger.info(
+                            "    Added linked STRAT: %s (%s)",
+                            issue.key,
+                            candidate.summary[:60],
+                        )
+                except RuntimeError as e:
+                    logger.warning(
+                        "    Failed to fetch linked STRATs: %s", e
+                    )
+
         logger.info(
-            "  Fetched %d of %d curated issues for %s",
+            "  Fetched %d curated issues for %s (filtered %d closed, added %d linked STRATs)",
             len(candidates),
-            len(keys_to_fetch),
             big_rock_name,
+            len(raw_issues) - len(candidates) + len(strat_keys_to_fetch),
+            len(strat_keys_to_fetch),
         )
         return candidates
+
+    @staticmethod
+    def _get_cloned_strat_key(issue: Any) -> str:
+        """Find a RHAISTRAT key linked via Cloners to an RHAIRFE issue.
+
+        Args:
+            issue: Raw Jira issue object (RHAIRFE).
+
+        Returns:
+            Linked RHAISTRAT key, or empty string if none found.
+        """
+        if not hasattr(issue.fields, "issuelinks") or not issue.fields.issuelinks:
+            return ""
+
+        for link in issue.fields.issuelinks:
+            if not hasattr(link, "type"):
+                continue
+            # Match "Cloners" link type (covers "is cloned by" / "clones")
+            link_type_name = getattr(link.type, "name", "")
+            if "Clon" not in link_type_name:
+                continue
+
+            # Check both directions
+            linked_issue = None
+            if hasattr(link, "inwardIssue"):
+                linked_issue = link.inwardIssue
+            elif hasattr(link, "outwardIssue"):
+                linked_issue = link.outwardIssue
+
+            if linked_issue and linked_issue.key.startswith("RHAISTRAT-"):
+                return linked_issue.key
+
+        return ""
 
     def fetch_candidates_for_rock(
         self,

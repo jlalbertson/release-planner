@@ -102,16 +102,15 @@ class TestLoadBigRocks:
 
     def test_load_big_rocks_from_config_dir(self, config_dir):
         rocks, config = load_big_rocks(config_dir)
-        assert len(rocks) == 15
+        assert len(rocks) == 11
         assert config.release == "3.5"
 
-    def test_all_15_rocks_present(self, config_dir):
+    def test_all_rocks_present(self, config_dir):
         rocks, _ = load_big_rocks(config_dir)
         names = [r.name for r in rocks]
         expected_names = [
             "MaaS",
             "Gen AI Studio",
-            "Prompt Lab",
             "AgentOps",
             "BYO Agent",
             "Tool Calling Support",
@@ -119,10 +118,7 @@ class TestLoadBigRocks:
             "Eval Hub",
             "AI Hub",
             "Observability",
-            "Multitenancy",
             "AutoRAG",
-            "AI Safety - Model Validation",
-            "vLLM Multimodal",
             "AutoML",
         ]
         assert names == expected_names
@@ -155,7 +151,7 @@ class TestLoadBigRocks:
     def test_priorities_are_sequential(self, config_dir):
         rocks, _ = load_big_rocks(config_dir)
         priorities = [r.priority for r in rocks]
-        assert priorities == list(range(1, 16))
+        assert priorities == list(range(1, 12))
 
     def test_rocks_have_required_fields(self, config_dir):
         rocks, _ = load_big_rocks(config_dir)

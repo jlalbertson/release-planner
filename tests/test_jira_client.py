@@ -25,6 +25,7 @@ def jira_client():
     )
     client._jira = MagicMock()
     client._jira.server_info.return_value = {"version": "8.0"}
+    client._jira._is_cloud = False  # Route to Server/DC search path
     return client
 
 

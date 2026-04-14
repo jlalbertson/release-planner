@@ -14,10 +14,11 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from release_planner.constants import (
     BIG_ROCK_COLUMN_WIDTHS_CHARS,
     BIG_ROCK_COLUMNS,
-    CANDIDATE_COLUMN_WIDTHS_CHARS,
-    CANDIDATE_COLUMNS,
+    FEATURE_COLUMN_WIDTHS_CHARS,
+    FEATURE_COLUMNS,
+    RFE_COLUMN_WIDTHS_CHARS,
+    RFE_COLUMNS,
     VALIDATION_ISSUE_STATUS,
-    VALIDATION_PHASE,
     VALIDATION_PRIORITY,
     VALIDATION_RFE_STATUS,
 )
@@ -37,7 +38,7 @@ _PRIORITY_CRITICAL_FONT = Font(color="FF0000", bold=True)
 _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
 
 # Jira browse URL base
-JIRA_BROWSE_URL = "https://issues.redhat.com/browse"
+JIRA_BROWSE_URL = "https://redhat.atlassian.net/browse"
 
 
 class ExcelWriter:
@@ -66,6 +67,11 @@ class ExcelWriter:
     def write(self, output_path: str | Path) -> str:
         """Write data to an Excel .xlsx file.
 
+        Creates three worksheets:
+        - Engineering Commitments: RHAISTRAT features only
+        - RFEs: RHAIRFE issues only
+        - Summit Big Rocks: rock summary
+
         Args:
             output_path: Path for the output .xlsx file.
 
@@ -75,14 +81,25 @@ class ExcelWriter:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Split candidates into features (RHAISTRAT) and RFEs (RHAIRFE)
+        features: dict[str, list[Candidate]] = {}
+        rfes: dict[str, list[Candidate]] = {}
+        for rock_name, candidates in self._candidates.items():
+            features[rock_name] = [c for c in candidates if not c.issue_key.startswith("RHAIRFE-")]
+            rfes[rock_name] = [c for c in candidates if c.issue_key.startswith("RHAIRFE-")]
+
         wb = Workbook()
 
-        # Create Candidates worksheet (rename the default sheet)
-        ws_candidates = wb.active
-        ws_candidates.title = f"Engineering Commitments {self._release}"
-        self._write_candidates_worksheet(ws_candidates)
+        # Feature worksheet (rename the default sheet)
+        ws_features = wb.active
+        ws_features.title = f"Engineering Commitments {self._release}"
+        self._write_feature_worksheet(ws_features, features)
 
-        # Create Big Rocks worksheet
+        # RFE worksheet
+        ws_rfes = wb.create_sheet(title=f"RFEs {self._release}")
+        self._write_rfe_worksheet(ws_rfes, rfes)
+
+        # Big Rocks worksheet
         ws_big_rocks = wb.create_sheet(title="Summit Big Rocks")
         self._write_big_rocks_worksheet(ws_big_rocks)
 
@@ -91,29 +108,47 @@ class ExcelWriter:
         logger.info("Wrote Excel file: %s", abs_path)
         return abs_path
 
-    def _write_candidates_worksheet(self, ws) -> None:
-        """Write the '{release} Candidates' worksheet with formatting."""
-        # Header row
-        ws.append(list(CANDIDATE_COLUMNS))
+    def _write_feature_worksheet(self, ws, features: dict[str, list[Candidate]]) -> None:
+        """Write the Engineering Commitments worksheet (RHAISTRAT features only)."""
+        columns = FEATURE_COLUMNS
+        ws.append(list(columns))
 
-        # Data rows
         row_count = 0
         for rock in self._big_rocks:
-            rock_candidates = self._candidates.get(rock.name, [])
-            for candidate in rock_candidates:
-                row = self._candidate_to_row(candidate)
-                ws.append(row)
+            for candidate in features.get(rock.name, []):
+                ws.append(self._feature_row(candidate))
                 row_count += 1
 
-        # Apply formatting
-        self._format_header(ws, len(CANDIDATE_COLUMNS))
-        self._set_column_widths(ws, CANDIDATE_COLUMNS, CANDIDATE_COLUMN_WIDTHS_CHARS)
-        self._apply_candidate_conditional_formatting(ws, row_count)
-        self._apply_row_banding(ws, row_count, len(CANDIDATE_COLUMNS))
-        self._apply_hyperlinks(ws, row_count)
-        self._apply_data_validations(ws, row_count)
+        self._format_header(ws, len(columns))
+        self._set_column_widths(ws, columns, FEATURE_COLUMN_WIDTHS_CHARS)
+        self._apply_conditional_formatting(ws, row_count, columns, "Issue status", "Priority")
+        self._apply_row_banding(ws, row_count, len(columns))
+        self._apply_hyperlinks_to_column(ws, row_count, columns, "Feature")
+        self._apply_data_validations_for(ws, row_count, columns, is_rfe=False)
         ws.freeze_panes = "C2"
-        ws.auto_filter.ref = f"A1:{get_column_letter(len(CANDIDATE_COLUMNS))}{row_count + 1}"
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{row_count + 1}"
+
+        logger.info("Wrote %d rows to '%s' worksheet", row_count, ws.title)
+
+    def _write_rfe_worksheet(self, ws, rfes: dict[str, list[Candidate]]) -> None:
+        """Write the RFE worksheet (RHAIRFE issues only)."""
+        columns = RFE_COLUMNS
+        ws.append(list(columns))
+
+        row_count = 0
+        for rock in self._big_rocks:
+            for candidate in rfes.get(rock.name, []):
+                ws.append(self._rfe_row(candidate))
+                row_count += 1
+
+        self._format_header(ws, len(columns))
+        self._set_column_widths(ws, columns, RFE_COLUMN_WIDTHS_CHARS)
+        self._apply_conditional_formatting(ws, row_count, columns, "RFE Status", "Priority")
+        self._apply_row_banding(ws, row_count, len(columns))
+        self._apply_hyperlinks_to_column(ws, row_count, columns, "RFE")
+        self._apply_data_validations_for(ws, row_count, columns, is_rfe=True)
+        ws.freeze_panes = "C2"
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{row_count + 1}"
 
         logger.info("Wrote %d rows to '%s' worksheet", row_count, ws.title)
 
@@ -143,31 +178,28 @@ class ExcelWriter:
 
         logger.info("Wrote %d rows to '%s' worksheet", len(self._big_rocks), ws.title)
 
-    def _candidate_to_row(self, candidate: Candidate) -> list:
-        """Convert a Candidate to a row of cell values matching CANDIDATE_COLUMNS order."""
-        issue_key_cell = candidate.issue_key
-        rfe_cell = candidate.rfe if candidate.rfe else ""
-
-        # Add source_pass info to comments
+    @staticmethod
+    def _build_comments(candidate: Candidate) -> str:
+        """Build comments string with source_pass tag appended."""
         comments = candidate.comments
         if candidate.source_pass and candidate.source_pass not in (comments or ""):
             if comments:
                 comments = f"{comments} [source: {candidate.source_pass}]"
             else:
                 comments = f"[source: {candidate.source_pass}]"
+        return comments
 
+    def _feature_row(self, candidate: Candidate) -> list:
+        """Convert a Candidate to a row matching FEATURE_COLUMNS order."""
         return [
             candidate.big_rock,
-            issue_key_cell,
+            candidate.issue_key,
             candidate.status,
             candidate.priority,
             candidate.phase,
             candidate.summary,
-            candidate.team,
             candidate.components,
             candidate.target_release,
-            rfe_cell,
-            candidate.rfe_status,
             candidate.pm,
             candidate.architect,
             candidate.delivery_owner,
@@ -175,22 +207,44 @@ class ExcelWriter:
             candidate.change_log,
             candidate.refinement_complete,
             candidate.refinement_notes,
-            comments,
+            self._build_comments(candidate),
             candidate.rice_score if candidate.rice_score is not None else "",
         ]
 
-    def _apply_hyperlinks(self, ws, row_count: int) -> None:
-        """Add hyperlinks to issue key and RFE columns after data is written."""
-        issue_key_col = CANDIDATE_COLUMNS.index("Issue key") + 1  # 1-based
-        rfe_col = CANDIDATE_COLUMNS.index("RFE") + 1
+    def _rfe_row(self, candidate: Candidate) -> list:
+        """Convert a Candidate to a row matching RFE_COLUMNS order."""
+        return [
+            candidate.big_rock,
+            candidate.issue_key,
+            candidate.status,
+            candidate.priority,
+            candidate.summary,
+            candidate.components,
+            candidate.target_release,
+            candidate.pm,
+            candidate.architect,
+            candidate.risk_flag,
+            candidate.change_log,
+            candidate.refinement_complete,
+            candidate.refinement_notes,
+            self._build_comments(candidate),
+            candidate.rice_score if candidate.rice_score is not None else "",
+        ]
 
-        for row_idx in range(2, row_count + 2):  # skip header
-            for col_idx in (issue_key_col, rfe_col):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                key = cell.value
-                if key and isinstance(key, str) and _ISSUE_KEY_RE.match(key):
-                    cell.hyperlink = f"{JIRA_BROWSE_URL}/{key}"
-                    cell.font = Font(color="0563C1", underline="single")
+    @staticmethod
+    def _apply_hyperlinks_to_column(
+        ws, row_count: int, columns: list[str], col_name: str
+    ) -> None:
+        """Add hyperlinks to a named column containing Jira issue keys."""
+        if col_name not in columns:
+            return
+        col_idx = columns.index(col_name) + 1
+        for row_idx in range(2, row_count + 2):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            key = cell.value
+            if key and isinstance(key, str) and _ISSUE_KEY_RE.match(key):
+                cell.hyperlink = f"{JIRA_BROWSE_URL}/{key}"
+                cell.font = Font(color="0563C1", underline="single")
 
     @staticmethod
     def _format_header(ws, num_cols: int) -> None:
@@ -210,10 +264,12 @@ class ExcelWriter:
             ws.column_dimensions[col_letter].width = char_width
 
     @staticmethod
-    def _apply_candidate_conditional_formatting(ws, row_count: int) -> None:
+    def _apply_conditional_formatting(
+        ws, row_count: int, columns: list[str], status_col_name: str, priority_col_name: str
+    ) -> None:
         """Apply status and priority formatting to data rows."""
-        status_col = CANDIDATE_COLUMNS.index("Issue status") + 1
-        priority_col = CANDIDATE_COLUMNS.index("Priority") + 1
+        status_col = columns.index(status_col_name) + 1
+        priority_col = columns.index(priority_col_name) + 1
 
         for row_idx in range(2, row_count + 2):
             # Status formatting
@@ -240,33 +296,30 @@ class ExcelWriter:
                     if not cell.fill or cell.fill == PatternFill():
                         cell.fill = _BAND_FILL
 
-    def _apply_data_validations(self, ws, row_count: int) -> None:
-        """Add dropdown data validations to key columns.
-
-        Validations are applied column-wide from row 2 to the last data row.
-        """
+    def _apply_data_validations_for(
+        self, ws, row_count: int, columns: list[str], is_rfe: bool = False
+    ) -> None:
+        """Add dropdown data validations to columns present in the given column list."""
         if row_count < 1:
             return
 
         last_row = row_count + 1  # +1 for header offset
 
-        # Build validation configs: (column_header, values_list)
         big_rock_names = [rock.name for rock in self._big_rocks]
         validations: list[tuple[str, list[str]]] = [
             ("Big Rock", big_rock_names),
             ("Issue status", VALIDATION_ISSUE_STATUS),
-            ("Priority", VALIDATION_PRIORITY),
-            ("DP/TP/GA", VALIDATION_PHASE),
             ("RFE Status", VALIDATION_RFE_STATUS),
+            ("Priority", VALIDATION_PRIORITY),
         ]
 
         if self._fix_versions:
             validations.append(("Target Release", self._fix_versions))
 
         for col_header, values in validations:
-            if col_header not in CANDIDATE_COLUMNS:
+            if col_header not in columns:
                 continue
-            col_idx = CANDIDATE_COLUMNS.index(col_header) + 1
+            col_idx = columns.index(col_header) + 1
             col_letter = get_column_letter(col_idx)
             cell_range = f"{col_letter}2:{col_letter}{last_row}"
 

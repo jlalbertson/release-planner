@@ -22,6 +22,7 @@ class Settings:
 
     jira_server: str = JIRA_SERVER_DEFAULT
     jira_token: str = field(default="", repr=False)
+    jira_email: str | None = None
     google_credentials_file: str | None = None
     google_credentials_json: str | None = field(default=None, repr=False)
     default_spreadsheet_id: str | None = None
@@ -74,6 +75,7 @@ class Settings:
         return cls(
             jira_server=os.environ.get("JIRA_SERVER", JIRA_SERVER_DEFAULT),
             jira_token=token,
+            jira_email=os.environ.get("JIRA_EMAIL"),
             google_credentials_file=google_creds_file,
             google_credentials_json=google_creds_json,
             default_spreadsheet_id=os.environ.get("DEFAULT_SPREADSHEET_ID"),

@@ -7,7 +7,7 @@ class CandidateColumn(StrEnum):
     """Column headers for the {release} Candidates worksheet, in order."""
 
     BIG_ROCK = "Big Rock"
-    ISSUE_KEY = "Issue key"
+    ISSUE_KEY = "Feature"
     ISSUE_STATUS = "Issue status"
     PRIORITY = "Priority"
     PHASE = "DP/TP/GA"
@@ -44,6 +44,89 @@ CANDIDATE_COLUMNS: list[str] = [col.value for col in CandidateColumn]
 
 # Ordered list of big rock column headers (for worksheet generation)
 BIG_ROCK_COLUMNS: list[str] = [col.value for col in BigRockColumn]
+
+# Feature tab columns (Engineering Commitments) -- RHAISTRAT issues only
+# Removes: Team, RFE, RFE Status
+FEATURE_COLUMNS: list[str] = [
+    "Big Rock",
+    "Feature",
+    "Issue status",
+    "Priority",
+    "DP/TP/GA",
+    "Title",
+    "Component[s]",
+    "Target Release",
+    "PM",
+    "Architect",
+    "Delivery Owner",
+    "Risk Flag",
+    "Change Log",
+    "Refinement complete",
+    "Refinement notes",
+    "Comments",
+    "RICE Score",
+]
+
+# RFE tab columns -- RHAIRFE issues only
+# Removes: DP/TP/GA, Team, RFE, RFE Status, Delivery Owner
+# Renames: Feature -> RFE, Issue status -> RFE Status
+RFE_COLUMNS: list[str] = [
+    "Big Rock",
+    "RFE",
+    "RFE Status",
+    "Priority",
+    "Title",
+    "Component[s]",
+    "Target Release",
+    "PM",
+    "Architect",
+    "Risk Flag",
+    "Change Log",
+    "Refinement complete",
+    "Refinement notes",
+    "Comments",
+    "RICE Score",
+]
+
+# Column widths in character units for the Feature tab (ExcelWriter)
+FEATURE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
+    "Big Rock": 17.63,
+    "Feature": 15.0,
+    "Issue status": 12.5,
+    "Priority": 12.13,
+    "DP/TP/GA": 8.0,
+    "Title": 21.38,
+    "Component[s]": 21.25,
+    "Target Release": 15.38,
+    "PM": 11.0,
+    "Architect": 13.0,
+    "Delivery Owner": 14.13,
+    "Risk Flag": 15.0,
+    "Change Log": 29.63,
+    "Refinement complete": 10.75,
+    "Refinement notes": 38.25,
+    "Comments": 62.38,
+    "RICE Score": 7.38,
+}
+
+# Column widths in character units for the RFE tab (ExcelWriter)
+RFE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
+    "Big Rock": 17.63,
+    "RFE": 15.0,
+    "RFE Status": 13.0,
+    "Priority": 12.13,
+    "Title": 21.38,
+    "Component[s]": 21.25,
+    "Target Release": 15.38,
+    "PM": 11.0,
+    "Architect": 13.0,
+    "Risk Flag": 15.0,
+    "Change Log": 29.63,
+    "Refinement complete": 10.75,
+    "Refinement notes": 38.25,
+    "Comments": 62.38,
+    "RICE Score": 7.38,
+}
 
 # Column widths in pixels for the Candidates worksheet (used by SheetsWriter)
 CANDIDATE_COLUMN_WIDTHS: dict[str, int] = {

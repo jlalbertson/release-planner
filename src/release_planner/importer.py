@@ -19,6 +19,7 @@ COLUMN_ALIASES: dict[str, str] = {
     "big rocks": "big_rock",
     "1-n ranking": "ranking",
     "ranking": "ranking",
+    "feature": "issue_key",
     "issue key": "issue_key",
     "issue_key": "issue_key",
     "key": "issue_key",
