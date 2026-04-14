@@ -123,7 +123,7 @@ class SheetsWriter:
 
     def _write_candidates_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
         """Write the '{release} Candidates' worksheet. Clears existing data first."""
-        ws_name = f"{self._release} Candidates"
+        ws_name = f"Engineering Commitments {self._release}"
         worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
 
         # Build all rows: header + data
@@ -144,7 +144,7 @@ class SheetsWriter:
 
     def _write_big_rocks_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
         """Write the 'Big Rocks' worksheet. Clears existing data first."""
-        ws_name = "Big Rocks"
+        ws_name = "Summit Big Rocks"
         worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
 
         # Build all rows: header + data
@@ -176,8 +176,8 @@ class SheetsWriter:
         requests: list[dict] = []
 
         # Get worksheet IDs
-        candidates_ws_name = f"{self._release} Candidates"
-        big_rocks_ws_name = "Big Rocks"
+        candidates_ws_name = f"Engineering Commitments {self._release}"
+        big_rocks_ws_name = "Summit Big Rocks"
 
         candidates_ws_id = None
         big_rocks_ws_id = None
@@ -192,15 +192,18 @@ class SheetsWriter:
         if candidates_ws_id is not None:
             num_cols = len(CANDIDATE_COLUMNS)
 
-            # Freeze header row
+            # Freeze header row and first 2 columns (Big Rock + Issue key)
             requests.append(
                 {
                     "updateSheetProperties": {
                         "properties": {
                             "sheetId": candidates_ws_id,
-                            "gridProperties": {"frozenRowCount": 1},
+                            "gridProperties": {
+                                "frozenRowCount": 1,
+                                "frozenColumnCount": 2,
+                            },
                         },
-                        "fields": "gridProperties.frozenRowCount",
+                        "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
                     }
                 }
             )

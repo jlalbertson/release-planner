@@ -9,25 +9,21 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from release_planner.constants import (
-    BIG_ROCK_COLUMN_WIDTHS,
+    BIG_ROCK_COLUMN_WIDTHS_CHARS,
     BIG_ROCK_COLUMNS,
-    CANDIDATE_COLUMN_WIDTHS,
+    CANDIDATE_COLUMN_WIDTHS_CHARS,
     CANDIDATE_COLUMNS,
+    VALIDATION_ISSUE_STATUS,
+    VALIDATION_PHASE,
+    VALIDATION_PRIORITY,
+    VALIDATION_RFE_STATUS,
 )
 from release_planner.models import BigRock, Candidate
 
 logger = logging.getLogger(__name__)
-
-# Pixel-to-character width approximate conversion for openpyxl
-_PX_TO_CHAR = 7.5
-
-
-def _px_to_col_width(px: int) -> float:
-    """Convert pixel width to openpyxl column width (character units)."""
-    return px / _PX_TO_CHAR
-
 
 # Header styling
 _HEADER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
@@ -52,6 +48,7 @@ class ExcelWriter:
         big_rocks: list[BigRock],
         candidates: dict[str, list[Candidate]],
         release: str,
+        fix_versions: list[str] | None = None,
     ):
         """Initialize the Excel writer.
 
@@ -59,10 +56,12 @@ class ExcelWriter:
             big_rocks: Ordered list of BigRock definitions.
             candidates: Map of big_rock_name -> list of Candidate, in display order.
             release: Release version string (e.g. "3.5") for worksheet naming.
+            fix_versions: Optional list of target release values for data validation.
         """
         self._big_rocks = big_rocks
         self._candidates = candidates
         self._release = release
+        self._fix_versions = fix_versions or []
 
     def write(self, output_path: str | Path) -> str:
         """Write data to an Excel .xlsx file.
@@ -80,11 +79,11 @@ class ExcelWriter:
 
         # Create Candidates worksheet (rename the default sheet)
         ws_candidates = wb.active
-        ws_candidates.title = f"{self._release} Candidates"
+        ws_candidates.title = f"Engineering Commitments {self._release}"
         self._write_candidates_worksheet(ws_candidates)
 
         # Create Big Rocks worksheet
-        ws_big_rocks = wb.create_sheet(title="Big Rocks")
+        ws_big_rocks = wb.create_sheet(title="Summit Big Rocks")
         self._write_big_rocks_worksheet(ws_big_rocks)
 
         wb.save(str(output_path))
@@ -108,11 +107,12 @@ class ExcelWriter:
 
         # Apply formatting
         self._format_header(ws, len(CANDIDATE_COLUMNS))
-        self._set_column_widths(ws, CANDIDATE_COLUMNS, CANDIDATE_COLUMN_WIDTHS)
+        self._set_column_widths(ws, CANDIDATE_COLUMNS, CANDIDATE_COLUMN_WIDTHS_CHARS)
         self._apply_candidate_conditional_formatting(ws, row_count)
         self._apply_row_banding(ws, row_count, len(CANDIDATE_COLUMNS))
         self._apply_hyperlinks(ws, row_count)
-        ws.freeze_panes = "A2"
+        self._apply_data_validations(ws, row_count)
+        ws.freeze_panes = "C2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(CANDIDATE_COLUMNS))}{row_count + 1}"
 
         logger.info("Wrote %d rows to '%s' worksheet", row_count, ws.title)
@@ -137,7 +137,8 @@ class ExcelWriter:
 
         # Apply formatting
         self._format_header(ws, len(BIG_ROCK_COLUMNS))
-        self._set_column_widths(ws, BIG_ROCK_COLUMNS, BIG_ROCK_COLUMN_WIDTHS)
+        self._set_column_widths(ws, BIG_ROCK_COLUMNS, BIG_ROCK_COLUMN_WIDTHS_CHARS)
+        self._merge_pillar_cells(ws, len(self._big_rocks))
         ws.freeze_panes = "A2"
 
         logger.info("Wrote %d rows to '%s' worksheet", len(self._big_rocks), ws.title)
@@ -201,12 +202,12 @@ class ExcelWriter:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     @staticmethod
-    def _set_column_widths(ws, columns: list[str], widths: dict[str, int]) -> None:
-        """Set column widths from the pixel-based width dict."""
+    def _set_column_widths(ws, columns: list[str], widths: dict[str, float]) -> None:
+        """Set column widths from character-unit width dict."""
         for i, col_name in enumerate(columns):
-            px = widths.get(col_name, 100)
+            char_width = widths.get(col_name, 13.0)
             col_letter = get_column_letter(i + 1)
-            ws.column_dimensions[col_letter].width = _px_to_col_width(px)
+            ws.column_dimensions[col_letter].width = char_width
 
     @staticmethod
     def _apply_candidate_conditional_formatting(ws, row_count: int) -> None:
@@ -238,3 +239,87 @@ class ExcelWriter:
                     cell = ws.cell(row=row_idx, column=col_idx)
                     if not cell.fill or cell.fill == PatternFill():
                         cell.fill = _BAND_FILL
+
+    def _apply_data_validations(self, ws, row_count: int) -> None:
+        """Add dropdown data validations to key columns.
+
+        Validations are applied column-wide from row 2 to the last data row.
+        """
+        if row_count < 1:
+            return
+
+        last_row = row_count + 1  # +1 for header offset
+
+        # Build validation configs: (column_header, values_list)
+        big_rock_names = [rock.name for rock in self._big_rocks]
+        validations: list[tuple[str, list[str]]] = [
+            ("Big Rock", big_rock_names),
+            ("Issue status", VALIDATION_ISSUE_STATUS),
+            ("Priority", VALIDATION_PRIORITY),
+            ("DP/TP/GA", VALIDATION_PHASE),
+            ("RFE Status", VALIDATION_RFE_STATUS),
+        ]
+
+        if self._fix_versions:
+            validations.append(("Target Release", self._fix_versions))
+
+        for col_header, values in validations:
+            if col_header not in CANDIDATE_COLUMNS:
+                continue
+            col_idx = CANDIDATE_COLUMNS.index(col_header) + 1
+            col_letter = get_column_letter(col_idx)
+            cell_range = f"{col_letter}2:{col_letter}{last_row}"
+
+            formula = '"' + ",".join(values) + '"'
+            dv = DataValidation(
+                type="list",
+                formula1=formula,
+                allow_blank=True,
+                showDropDown=False,
+            )
+            dv.sqref = cell_range
+            ws.add_data_validation(dv)
+
+    @staticmethod
+    def _merge_pillar_cells(ws, row_count: int) -> None:
+        """Merge contiguous Pillar cells vertically in the Big Rocks worksheet.
+
+        Identifies runs of the same Pillar value in column A (starting at row 2)
+        and merges them, applying vertical alignment.
+        """
+        if row_count < 2:
+            return
+
+        pillar_col = 1  # Column A
+        start_row = 2  # First data row (after header)
+
+        current_pillar = ws.cell(row=start_row, column=pillar_col).value
+        run_start = start_row
+
+        for row_idx in range(start_row + 1, start_row + row_count + 1):
+            # Use None for rows past the data to flush the last run
+            if row_idx <= start_row + row_count - 1:
+                cell_value = ws.cell(row=row_idx, column=pillar_col).value
+            else:
+                cell_value = None
+
+            if cell_value == current_pillar and row_idx <= start_row + row_count - 1:
+                continue
+
+            # End of a run -- merge if more than 1 row
+            run_end = row_idx - 1
+            if run_end > run_start:
+                ws.merge_cells(
+                    start_row=run_start,
+                    start_column=pillar_col,
+                    end_row=run_end,
+                    end_column=pillar_col,
+                )
+                ws.cell(row=run_start, column=pillar_col).alignment = Alignment(
+                    vertical="center",
+                )
+
+            # Start new run
+            if row_idx <= start_row + row_count - 1:
+                current_pillar = cell_value
+                run_start = row_idx

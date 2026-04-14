@@ -226,18 +226,18 @@ def mock_gspread_client():
     # Mock worksheets
     mock_candidates_ws = MagicMock()
     mock_candidates_ws.id = 0
-    mock_candidates_ws.title = "3.5 Candidates"
+    mock_candidates_ws.title = "Engineering Commitments 3.5"
 
     mock_big_rocks_ws = MagicMock()
     mock_big_rocks_ws.id = 1
-    mock_big_rocks_ws.title = "Big Rocks"
+    mock_big_rocks_ws.title = "Summit Big Rocks"
 
     mock_spreadsheet.worksheets.return_value = [mock_candidates_ws, mock_big_rocks_ws]
 
     def worksheet_side_effect(name):
-        if "Candidates" in name:
+        if "Engineering Commitments" in name:
             return mock_candidates_ws
-        elif name == "Big Rocks":
+        elif name == "Summit Big Rocks":
             return mock_big_rocks_ws
         raise Exception(f"Unexpected worksheet name: {name}")
 

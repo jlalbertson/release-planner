@@ -45,39 +45,100 @@ CANDIDATE_COLUMNS: list[str] = [col.value for col in CandidateColumn]
 # Ordered list of big rock column headers (for worksheet generation)
 BIG_ROCK_COLUMNS: list[str] = [col.value for col in BigRockColumn]
 
-# Column widths in pixels for the Candidates worksheet
+# Column widths in pixels for the Candidates worksheet (used by SheetsWriter)
 CANDIDATE_COLUMN_WIDTHS: dict[str, int] = {
-    CandidateColumn.BIG_ROCK: 150,
-    CandidateColumn.ISSUE_KEY: 135,
-    CandidateColumn.ISSUE_STATUS: 110,
-    CandidateColumn.PRIORITY: 90,
-    CandidateColumn.PHASE: 75,
-    CandidateColumn.TITLE: 450,
-    CandidateColumn.TEAM: 150,
-    CandidateColumn.COMPONENTS: 225,
-    CandidateColumn.TARGET_RELEASE: 110,
-    CandidateColumn.RFE: 135,
-    CandidateColumn.RFE_STATUS: 110,
-    CandidateColumn.PM: 150,
-    CandidateColumn.ARCHITECT: 150,
-    CandidateColumn.DELIVERY_OWNER: 150,
-    CandidateColumn.RISK_FLAG: 90,
-    CandidateColumn.CHANGE_LOG: 225,
-    CandidateColumn.REFINEMENT_COMPLETE: 135,
-    CandidateColumn.REFINEMENT_NOTES: 225,
-    CandidateColumn.COMMENTS: 300,
-    CandidateColumn.RICE_SCORE: 90,
+    CandidateColumn.BIG_ROCK: 132,
+    CandidateColumn.ISSUE_KEY: 98,
+    CandidateColumn.ISSUE_STATUS: 94,
+    CandidateColumn.PRIORITY: 91,
+    CandidateColumn.PHASE: 60,
+    CandidateColumn.TITLE: 160,
+    CandidateColumn.TEAM: 128,
+    CandidateColumn.COMPONENTS: 159,
+    CandidateColumn.TARGET_RELEASE: 115,
+    CandidateColumn.RFE: 98,
+    CandidateColumn.RFE_STATUS: 98,
+    CandidateColumn.PM: 83,
+    CandidateColumn.ARCHITECT: 98,
+    CandidateColumn.DELIVERY_OWNER: 106,
+    CandidateColumn.RISK_FLAG: 113,
+    CandidateColumn.CHANGE_LOG: 222,
+    CandidateColumn.REFINEMENT_COMPLETE: 81,
+    CandidateColumn.REFINEMENT_NOTES: 287,
+    CandidateColumn.COMMENTS: 468,
+    CandidateColumn.RICE_SCORE: 55,
 }
 
-# Column widths in pixels for the Big Rocks worksheet
-BIG_ROCK_COLUMN_WIDTHS: dict[str, int] = {
-    BigRockColumn.PILLAR: 150,
-    BigRockColumn.PRIORITY: 75,
-    BigRockColumn.BIG_ROCK: 260,
-    BigRockColumn.STATE: 150,
-    BigRockColumn.OWNER: 150,
-    BigRockColumn.NOTES: 300,
+# Column widths in character units for the Candidates worksheet (used by ExcelWriter)
+# Values taken from the reference "Engineering Commitments 3.5" sheet.
+CANDIDATE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
+    CandidateColumn.BIG_ROCK: 17.63,
+    CandidateColumn.ISSUE_KEY: 13.0,
+    CandidateColumn.ISSUE_STATUS: 12.5,
+    CandidateColumn.PRIORITY: 12.13,
+    CandidateColumn.PHASE: 8.0,
+    CandidateColumn.TITLE: 21.38,
+    CandidateColumn.TEAM: 17.0,
+    CandidateColumn.COMPONENTS: 21.25,
+    CandidateColumn.TARGET_RELEASE: 15.38,
+    CandidateColumn.RFE: 13.0,
+    CandidateColumn.RFE_STATUS: 13.0,
+    CandidateColumn.PM: 11.0,
+    CandidateColumn.ARCHITECT: 13.0,
+    CandidateColumn.DELIVERY_OWNER: 14.13,
+    CandidateColumn.RISK_FLAG: 15.0,
+    CandidateColumn.CHANGE_LOG: 29.63,
+    CandidateColumn.REFINEMENT_COMPLETE: 10.75,
+    CandidateColumn.REFINEMENT_NOTES: 38.25,
+    CandidateColumn.COMMENTS: 62.38,
+    CandidateColumn.RICE_SCORE: 7.38,
 }
+
+# Column widths in pixels for the Big Rocks worksheet (used by SheetsWriter)
+BIG_ROCK_COLUMN_WIDTHS: dict[str, int] = {
+    BigRockColumn.PILLAR: 146,
+    BigRockColumn.PRIORITY: 86,
+    BigRockColumn.BIG_ROCK: 152,
+    BigRockColumn.STATE: 70,
+    BigRockColumn.OWNER: 133,
+    BigRockColumn.NOTES: 346,
+}
+
+# Column widths in character units for the Big Rocks worksheet (used by ExcelWriter)
+# Values taken from the reference "Summit Big Rocks" sheet.
+BIG_ROCK_COLUMN_WIDTHS_CHARS: dict[str, float] = {
+    BigRockColumn.PILLAR: 19.5,
+    BigRockColumn.PRIORITY: 11.5,
+    BigRockColumn.BIG_ROCK: 20.25,
+    BigRockColumn.STATE: 9.38,
+    BigRockColumn.OWNER: 17.75,
+    BigRockColumn.NOTES: 46.13,
+}
+
+# Data validation dropdown values for Excel output
+VALIDATION_ISSUE_STATUS: list[str] = [
+    "New",
+    "Refinement",
+    "In Progress",
+    "Review",
+    "Pending Release",
+]
+VALIDATION_PRIORITY: list[str] = [
+    "Blocker",
+    "Critical",
+    "Major",
+    "Normal",
+    "Minor",
+    "Undefined",
+]
+VALIDATION_PHASE: list[str] = ["DP", "TP", "GA"]
+VALIDATION_RFE_STATUS: list[str] = [
+    "New",
+    "Stakeholder Review",
+    "In Progress",
+    "Approved",
+    "Rejection Pending",
+]
 
 # Jira defaults
 JIRA_SERVER_DEFAULT = "https://issues.redhat.com"
