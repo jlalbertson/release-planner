@@ -48,6 +48,7 @@ def simple_candidates() -> dict[str, list[Candidate]]:
                 status="In Progress",
                 priority="Major",
                 summary="Feature A",
+                labels="rhoai-3.5, 3.5-candidate",
                 source_pass="committed",
             ),
             Candidate(
@@ -218,14 +219,15 @@ class TestFeatureWorksheet:
         cell = ws.cell(row=3, column=priority_col)
         assert cell.font.bold is True
 
-    def test_source_pass_in_comments(self, tmp_path, simple_big_rocks, simple_candidates):
+    def test_labels_in_comments(self, tmp_path, simple_big_rocks, simple_candidates):
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
         ws = wb["Engineering Commitments 3.5"]
         comments_col = FEATURE_COLUMNS.index("Comments") + 1
         cell = ws.cell(row=2, column=comments_col)
-        assert "[source: committed]" in str(cell.value)
+        assert "rhoai-3.5" in str(cell.value)
+        assert "3.5-candidate" in str(cell.value)
 
     def test_has_phase_column(self, tmp_path, simple_big_rocks, simple_candidates):
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
@@ -243,13 +245,13 @@ class TestFeatureWorksheet:
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(FEATURE_COLUMNS))]
         assert "Team" not in headers
 
-    def test_no_rfe_columns(self, tmp_path, simple_big_rocks, simple_candidates):
+    def test_no_rfe_status_column(self, tmp_path, simple_big_rocks, simple_candidates):
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
         ws = wb["Engineering Commitments 3.5"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(FEATURE_COLUMNS))]
-        assert "RFE" not in headers
+        assert "RFE" in headers
         assert "RFE Status" not in headers
 
 

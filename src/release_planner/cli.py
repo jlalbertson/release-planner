@@ -41,6 +41,7 @@ def run_pipeline(
     passes: list[int] | None = None,
     dry_run: bool = False,
     duplicate_mode: str = "first",
+    exclude_fix_version_patterns: list[str] | None = None,
 ) -> dict:
     """Execute the full pipeline with three-pass discovery.
 
@@ -95,6 +96,38 @@ def run_pipeline(
             passes=passes,
             seen_keys=seen_keys if duplicate_mode == "first" else None,
         )
+
+        # Filter out features (non-RHAIRFE) targeting excluded fix versions
+        if exclude_fix_version_patterns:
+            before_count = len(candidates)
+            candidates = [
+                c
+                for c in candidates
+                if c.issue_key.startswith("RHAIRFE-")
+                or not any(p in c.target_release for p in exclude_fix_version_patterns)
+            ]
+            filtered_count = before_count - len(candidates)
+            if filtered_count:
+                logger.info(
+                    "  Filtered %d features with excluded target versions (*%s*)",
+                    filtered_count,
+                    ", ".join(exclude_fix_version_patterns),
+                )
+
+        # Filter out features (non-RHAIRFE) in terminal states
+        _terminal_statuses = {"Closed", "Review", "Pending Release"}
+        before_count = len(candidates)
+        candidates = [
+            c
+            for c in candidates
+            if c.issue_key.startswith("RHAIRFE-") or c.status not in _terminal_statuses
+        ]
+        filtered_count = before_count - len(candidates)
+        if filtered_count:
+            logger.info(
+                "  Filtered %d features with terminal status (Closed/Review/Pending Release)",
+                filtered_count,
+            )
 
         # Track stats
         stats = {
@@ -329,7 +362,7 @@ def main():
 )
 @click.option(
     "--duplicate-mode",
-    default="first",
+    default="all",
     type=click.Choice(["first", "all"]),
     help="'first' (show under highest-priority rock) or 'all' (show under every rock)",
 )
@@ -374,6 +407,7 @@ def generate(
 
     release = br_config.release
     fix_versions = br_config.fix_versions
+    exclude_fix_version_patterns = br_config.exclude_fix_version_patterns
 
     # Load field mapping
     field_mapping = load_field_mapping(effective_data_dir)
@@ -426,6 +460,7 @@ def generate(
             passes=pass_list,
             dry_run=dry_run,
             duplicate_mode=duplicate_mode,
+            exclude_fix_version_patterns=exclude_fix_version_patterns,
         )
     except click.ClickException:
         raise

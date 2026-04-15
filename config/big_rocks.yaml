@@ -11,6 +11,11 @@ fix_versions:
   - "{release}.0"
   - "RHAIIS-{release}"
 
+# Exclude features (STRATs) whose fixVersion matches any of these patterns.
+# Used to filter out issues targeted at a prior release.
+exclude_fix_version_patterns:
+  - "3.4"
+
 # Project scope for all queries
 projects: "RHAISTRAT, RHAIRFE"
 
@@ -84,33 +89,6 @@ big_rocks:
     exclude_keywords: []
 
   - priority: 3
-    name: "AgentOps"
-    full_name: "AgentOps (continue from 3.4)"
-    pillar: "Agents"
-    state: "continue from 3.4"
-    owner: "Chris Anderson"
-    components:
-      - "AgentOps"
-      - "Llama Stack Core"
-    # Curated from Q1 2026 PM/Eng Planning PDF, slide 8 – Mid Term (3.5) board
-    # NOTE: "Enable Safe Execution of LLM-Generated..." not found in RHAISTRAT/RHAIRFE
-    issue_keys:
-      - "RHAIRFE-794"      # Implement Platform-Native GenAI Observability with OTel
-      - "RHAIRFE-1313"     # Enable browsing, searching, and discovering registered agents
-      - "RHAIRFE-1351"     # [TP] Productize & Downstream the Agent Operator (Kagenti)
-      - "RHAIRFE-333"      # Implement Cost Management & Optimization for Agentic AI
-      - "RHAIRFE-1370"     # Skills Registry: Verified Skills for Agentic AI
-    jql: >-
-      project in ({projects})
-      AND component in ("AgentOps", "Llama Stack Core")
-      ORDER BY priority ASC, key ASC
-    rfe_jql: >-
-      project = RHAIRFE
-      AND component in ("AgentOps", "Llama Stack Core")
-      ORDER BY priority ASC, key ASC
-    exclude_keywords: []
-
-  - priority: 4
     name: "BYO Agent"
     full_name: "BYO Agent (continue from 3.4)"
     pillar: "Agents"
@@ -118,20 +96,91 @@ big_rocks:
     owner: "Chris Anderson"
     components:
       - "AgentDev"
-    # Curated from Q1 2026 PM/Eng Planning PDF, slide 9 – Mid Term (3.5) board
-    # NOTE: "Enable Safe Execution..." and "Productize RHCL Operator" not found in RHAISTRAT/RHAIRFE
-    # Overlaps with AgentOps will be deduped by seen_keys
+    # Full issue list from Agentic AI Roadmap dashboard (Mid Term 3.5)
+    # Same dashboard as AgentOps; deduplication is off so both rocks show full picture
     issue_keys:
-      - "RHAIRFE-794"      # Implement Platform-Native GenAI Observability (also AgentOps)
-      - "RHAIRFE-1313"     # Enable browsing/searching registered agents (also AgentOps)
-      - "RHAIRFE-1459"     # MCP Gateway UI Registration and Virtual MCP Server Management
-      - "RHAIRFE-1506"     # GA readiness for the Responses API
-      - "RHAISTRAT-9050"   # GA readiness for the Responses API (STRAT)
+      # STRATs
+      - "RHAISTRAT-9066"     # Llama Stack Performance and Capacity Measurement/Documentation
+      - "RHAISTRAT-9064"     # [Telemetry] Introduce Llama Stack API Adoption Metrics
+      - "RHAISTRAT-9055"    # Chat Metrics & Observability (Tracing) in Playground
       - "RHAISTRAT-9056"    # MCP Registry – Centralized Governance
+      - "RHAISTRAT-9057"    # Llama Stack should be support Multi-Arch [Z]
+      - "RHAISTRAT-9058"    # Llama Stack should be support Multi-Arch [Power]
+      - "RHAISTRAT-9059"    # Create Deployment Best Practices Guide for the Llama Stack Operator
+      - "RHAISTRAT-9060"    # llama-stack-distro configmaps from the main resource namespace
+      - "RHAISTRAT-9061"    # Guardrails – Surface Basic Llama Stack Guardrails in playground (MVP)
+      - "RHAISTRAT-9065"    # Document Llama Stack Multi-Tenancy
+      - "RHAISTRAT-9013"   # Introduce runtime config in LlamaStackDistribution
       - "RHAISTRAT-9014"   # Tech-preview/GA readiness for the conversations API
-      - "RHAIRFE-333"      # Implement Cost Management & Optimization (also AgentOps)
-      - "RHAIRFE-1557"     # [Phase 2] Agent Catalog and Registry Integration
-      - "RHAIRFE-1370"     # Skills Registry: Verified Skills (also AgentOps)
+      - "RHAISTRAT-9015"   # Standardized Testing Process for Llama Stack Inference Providers
+      - "RHAISTRAT-9022"   # Improve Inference API OpenAI parity
+      - "RHAISTRAT-9023"   # Responses API Extended Capabilities
+      - "RHAISTRAT-9024"   # Enable remote::gemini provider in Llama Stack
+      - "RHAISTRAT-9025"   # Enable remote::anthropic provider in Llama Stack [3.5]
+      - "RHAISTRAT-9026"   # [QE] CI-level tracking of downstream Llama Stack performance
+      - "RHAISTRAT-9031"   # Migrate Guardrails Integration to NeMo Guardrails
+      - "RHAISTRAT-9033"   # AWS Security Token Service (STS) for Bedrock inference provider
+      - "RHAISTRAT-9034"   # Create long-lived LLS distro deployment
+      - "RHAISTRAT-9035"   # Understand and Measure Your Agents
+      - "RHAISTRAT-9036"   # Agent Memory Primitives
+      - "RHAISTRAT-9037"   # Governance of Agentic Assets
+      - "RHAISTRAT-9038"   # Make Red Hat Inference Server the Best for Agents
+      - "RHAISTRAT-9039"   # CLONE - Deprecate and remove the Evaluation API from Llama Stack
+      - "RHAISTRAT-9040"   # Deprecate and remove the Safety/Shields API from Llama Stack
+      - "RHAISTRAT-9043"   # Rename Llama Stack to remove Meta trademark dependency ahead of GA
+      - "RHAISTRAT-9044"   # Remove inline providers from Llama Stack distribution image
+      - "RHAISTRAT-9045"   # Integrate Docling as a backend provider for File Processor API
+      - "RHAISTRAT-9047"   # Reliable Multi-Turn Stateful Tool Calling via Responses API
+      - "RHAISTRAT-9048"   # Include File Processor API in Llama Stack Operator downstream
+      - "RHAISTRAT-9049"   # LlamaStack Support for Claude Code Agent SDK
+      - "RHAISTRAT-9050"   # GA readiness for the Responses API
+      - "RHAISTRAT-9051"   # Agent Registry for OpenShift AI (RHOAI) — Phase 1
+      - "RHAISTRAT-9054"   # Responses API EA1 Readiness (3.5)
+      # RFEs
+      - "RHAIRFE-284"      # Provide Sandboxed Execution Environments for Autonomous AI Agents
+      - "RHAIRFE-710"      # Chat Metrics & Observability (Tracing) in Playground
+      - "RHAIRFE-727"      # Deployment of playground configs to executable code
+      - "RHAIRFE-728"      # User-Level Secrets Management in Gen AI Studio
+      - "RHAIRFE-794"      # Implement Platform-Native GenAI Observability with OTel
+      - "RHAIRFE-856"      # Integrate Docling as a backend provider for File Processor API
+      - "RHAIRFE-911"      # Chat Persistence for Gen AI Studio
+      - "RHAIRFE-912"      # Configuration Persistence for Gen AI Studio
+      - "RHAIRFE-913"      # Multimodal Support in Gen AI Studio Playground
+      - "RHAIRFE-951"      # Enforce FIPS Compliance Settings by Default for Llama-Stack
+      - "RHAIRFE-976"      # Security guide for Llamastack
+      - "RHAIRFE-1061"     # View Source Files in Gen AI Studio Playground
+      - "RHAIRFE-1065"     # [Phase 3] Advanced Agent Capabilities and Full Ecosystem Governance
+      - "RHAIRFE-1313"     # Enable browsing, searching, and discovering registered agents
+      - "RHAIRFE-1351"     # [TP] Productize & Downstream the Agent Operator
+      - "RHAIRFE-1370"     # Skills Registry: Verified Skills for Agentic AI
+      - "RHAIRFE-1435"     # Deprecate and remove the Safety/Shields API from Llama Stack
+      - "RHAIRFE-1436"     # Deprecate and remove the Evaluation API from Llama Stack
+      - "RHAIRFE-1445"     # Stable Red Hat-owned product identity for agentic API before GA
+      - "RHAIRFE-1451"     # Existing Vector Store Addition/Registration in Gen AI Studio
+      - "RHAIRFE-1454"     # Multi-Language Support in Gen AI Studio Playground
+      - "RHAIRFE-1455"     # Multi-Vector Store Selection in Gen AI Studio Playground
+      - "RHAIRFE-1457"     # [TP] Productize MCP Gateway Operator for RHOAI
+      - "RHAIRFE-1459"     # MCP Gateway UI Registration and Virtual MCP Server Management
+      - "RHAIRFE-1469"     # Production Llama Stack distribution – production-suitable providers
+      - "RHAIRFE-1491"     # CLONE - Rename Llama Stack to remove Meta trademark dependency
+      - "RHAIRFE-1493"     # CLONE - Integrate Docling as backend provider for File Processor API
+      - "RHAIRFE-1506"     # GA readiness for the Responses API
+      - "RHAIRFE-1528"     # MLFlow Prompt Template Integration in Gen AI Studio
+      - "RHAIRFE-1586"     # Provide OOTB connections for Common Data Sources in UI
+      - "RHAIRFE-1614"     # Code Interpreter Tool Type for the Responses API
+      - "RHAIRFE-1639"     # Model Type and Capability Metadata Schema with API Filtering
+      - "RHAIRFE-1640"     # AI Hub Model Catalog and Registry Type and Capability Display
+      - "RHAIRFE-1641"     # Gen AI Studio Playground Context-Aware Model Selector Filtering
+      - "RHAIRFE-1642"     # Gen AI Studio Playground Model Selector Inline Capability Tags
+      - "RHAIRFE-1643"     # MCP Server Registration and Management UI in RHOAI
+      - "RHAIRFE-1644"     # Virtual MCP Server Creation and Management in RHOAI
+      - "RHAIRFE-1645"     # Promote MCP Endpoints to Gen AI Studio from RHOAI Console
+      - "RHAIRFE-1646"     # Surface MCP Endpoints in AI Asset Endpoints View
+      - "RHAIRFE-1651"     # Surface Guardrails and Guardrail Templates in Gen AI Studio
+      - "RHAIRFE-1652"     # Consolidate Prompts into Gen AI Studio AI Assets Hub
+      - "RHAIRFE-1712"     # Public Skills Registry: Curated AI Skills Distribution
+      - "RHAIRFE-1713"     # In-Cluster Skills Registry: Self-Hosted AI Skills Management
+      - "RHAIRFE-1917"     # Support Google Interactions API as front-end protocol in Llama Stack
     jql: >-
       project in ({projects})
       AND component = "AgentDev"
@@ -142,9 +191,9 @@ big_rocks:
       ORDER BY priority ASC, key ASC
     exclude_keywords: []
 
-  - priority: 5
-    name: "Tool Calling Support"
-    full_name: "Tool Calling Support (new for 3.5)"
+  - priority: 4
+    name: "Tool Calling"
+    full_name: "Tool Calling (new for 3.5)"
     pillar: "Inference"
     state: "new for 3.5"
     owner: "Robin Carter, Dana Flores"
@@ -155,14 +204,16 @@ big_rocks:
       - "vLLM Runtime"
     # Curated from Q1 2026 PM/Eng Planning PDF, slide 17 (Big Rocks) + slide 20 (vLLM)
     issue_keys:
-      # From Big Rocks for 3.5 summary (slide 17)
-      - "RHAIRFE-1189"     # Enable Tool Calling for Top 5 Open Source Models (overall)
-      - "RHAIRFE-1433"     # Phase 0: Responses API Parity
+      # STRATs
+      - "RHAISTRAT-9017"   # Phase 2: Model Catalog Enablement
+      - "RHAISTRAT-9052"
+      - "RHAISTRAT-9053"
+      # RFEs
       - "RHAIRFE-1428"     # Phase 1: Smart Validated Defaults
       - "RHAIRFE-1429"     # Phase 1: Test Matrix + BFCL Gates / Tool Call Parser Reliability
-      - "RHAIRFE-1432"     # Phase 2: Structured Output Enforcement
       - "RHAIRFE-1431"     # Phase 2: Reduce Parser Maintenance
-      - "RHAISTRAT-9017"   # Phase 2: Model Catalog Enablement
+      - "RHAIRFE-1432"     # Phase 2: Structured Output Enforcement
+      - "RHAIRFE-1433"     # Phase 0: Responses API Parity
     jql: >-
       project in ({projects})
       AND component in ("AI Core Platform", "AI Platform DevOps", "llm-d", "vLLM Runtime")
@@ -177,7 +228,7 @@ big_rocks:
       - "multimodal"
       - "multitenan"
 
-  - priority: 6
+  - priority: 5
     name: "llm-d"
     full_name: "llm-d (continue from 3.4)"
     pillar: "Inference"
@@ -210,7 +261,7 @@ big_rocks:
       - "multitenan"
       - "RBAC"
 
-  - priority: 7
+  - priority: 6
     name: "Eval Hub"
     full_name: "Eval Hub (continue from 3.4)"
     pillar: "Data"
@@ -254,7 +305,7 @@ big_rocks:
       ORDER BY priority ASC, key ASC
     exclude_keywords: []
 
-  - priority: 8
+  - priority: 7
     name: "AI Hub"
     full_name: "AI Hub (continue from 3.4)"
     pillar: "Platform"
@@ -287,7 +338,7 @@ big_rocks:
       ORDER BY priority ASC, key ASC
     exclude_keywords: []
 
-  - priority: 9
+  - priority: 8
     name: "Observability"
     full_name: "Observability (continue from 3.4)"
     pillar: "Platform"
@@ -313,7 +364,7 @@ big_rocks:
       ORDER BY priority ASC, key ASC
     exclude_keywords: []
 
-  - priority: 10
+  - priority: 9
     name: "AutoRAG"
     full_name: "AutoRAG (continue from 3.4)"
     pillar: "Data"
@@ -339,7 +390,7 @@ big_rocks:
       ORDER BY priority ASC, key ASC
     exclude_keywords: []
 
-  - priority: 11
+  - priority: 10
     name: "AutoML"
     full_name: "AutoML (continue from 3.4)"
     pillar: "Data"

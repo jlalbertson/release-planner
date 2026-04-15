@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -283,15 +284,26 @@ class JiraClient:
         # Extract summary
         summary = getattr(fields, "summary", "") or ""
 
-        # Extract fixVersions -> target_release
-        target_release = ""
-        if hasattr(fields, "fixVersions") and fields.fixVersions:
-            target_release = fields.fixVersions[0].name
-        elif "target_release" in self._field_mapping:
-            custom_field = self._field_mapping["target_release"]
-            target_release = str(getattr(fields, custom_field, "") or "")
+        # Extract labels
+        labels = ""
+        if hasattr(fields, "labels") and fields.labels:
+            labels = ", ".join(fields.labels)
 
-        # Extract team from custom field
+        # Extract target_release from Target Version (customfield_10855),
+        # falling back to fixVersions
+        target_release = ""
+        tv_val = getattr(fields, "customfield_10855", None)
+        if tv_val:
+            if isinstance(tv_val, list):
+                target_release = tv_val[0].name if tv_val and hasattr(tv_val[0], "name") else ""
+            elif hasattr(tv_val, "name"):
+                target_release = tv_val.name
+            else:
+                target_release = str(tv_val)
+        if not target_release and hasattr(fields, "fixVersions") and fields.fixVersions:
+            target_release = fields.fixVersions[0].name
+
+        # Extract team from custom field (via field_mapping)
         team = ""
         if "team" in self._field_mapping:
             custom_field = self._field_mapping["team"]
@@ -299,15 +311,13 @@ class JiraClient:
             if team_val:
                 team = str(team_val) if not hasattr(team_val, "name") else team_val.name
 
-        # Extract PM from custom field
+        # Extract PM from Product Manager (customfield_10469)
         pm = ""
-        if "pm" in self._field_mapping:
-            custom_field = self._field_mapping["pm"]
-            pm_val = getattr(fields, custom_field, None)
-            if pm_val:
-                pm = str(pm_val) if not hasattr(pm_val, "displayName") else pm_val.displayName
+        pm_val = getattr(fields, "customfield_10469", None)
+        if pm_val:
+            pm = pm_val.displayName if hasattr(pm_val, "displayName") else str(pm_val)
 
-        # Extract architect from custom field
+        # Extract architect from custom field (via field_mapping)
         architect = ""
         if "architect" in self._field_mapping:
             custom_field = self._field_mapping["architect"]
@@ -317,26 +327,26 @@ class JiraClient:
                     str(arch_val) if not hasattr(arch_val, "displayName") else arch_val.displayName
                 )
 
-        # Extract delivery owner from custom field
+        # Extract delivery owner from Assignee (standard field)
         delivery_owner = ""
-        if "delivery_owner" in self._field_mapping:
-            custom_field = self._field_mapping["delivery_owner"]
-            do_val = getattr(fields, custom_field, None)
-            if do_val:
-                delivery_owner = (
-                    str(do_val) if not hasattr(do_val, "displayName") else do_val.displayName
-                )
+        if hasattr(fields, "assignee") and fields.assignee:
+            delivery_owner = (
+                fields.assignee.displayName
+                if hasattr(fields.assignee, "displayName")
+                else str(fields.assignee)
+            )
 
-        # Extract phase from custom field
+        # Extract phase from Release Type (customfield_10851)
         phase = ""
-        if "phase" in self._field_mapping:
-            custom_field = self._field_mapping["phase"]
-            phase_val = getattr(fields, custom_field, None)
-            if phase_val:
-                phase = str(phase_val) if not hasattr(phase_val, "name") else phase_val.name
+        phase_val = getattr(fields, "customfield_10851", None)
+        if phase_val:
+            phase = phase_val.value if hasattr(phase_val, "value") else str(phase_val)
 
         # Extract RFE link
         rfe_key, rfe_status = self.get_rfe_link(raw_issue)
+        # For STRATs, also find parent RFE via Clones link or description
+        if not rfe_key and raw_issue.key.startswith("RHAISTRAT-"):
+            rfe_key = self._get_parent_rfe_key(raw_issue)
 
         # Determine source
         source = "rfe" if source_pass == "rfe" else "jira"
@@ -348,6 +358,7 @@ class JiraClient:
             priority=priority,
             summary=summary,
             components=components_str,
+            labels=labels,
             target_release=target_release,
             team=team,
             pm=pm,
@@ -603,6 +614,48 @@ class JiraClient:
 
             if linked_issue and linked_issue.key.startswith("RHAISTRAT-"):
                 return linked_issue.key
+
+        return ""
+
+    @staticmethod
+    def _get_parent_rfe_key(issue: Any) -> str:
+        """Find linked RHAIRFE key for a RHAISTRAT via Clones link or description.
+
+        Checks:
+        1. Issue links with Cloners type pointing to RHAIRFE-*
+        2. Description text for 'Parent RFE' followed by an RHAIRFE key
+
+        Args:
+            issue: Raw Jira issue object (RHAISTRAT).
+
+        Returns:
+            Linked RHAIRFE key, or empty string if none found.
+        """
+        # Check issue links for Clones type pointing to RHAIRFE
+        if hasattr(issue.fields, "issuelinks") and issue.fields.issuelinks:
+            for link in issue.fields.issuelinks:
+                if not hasattr(link, "type"):
+                    continue
+                link_type_name = getattr(link.type, "name", "")
+                if "Clon" not in link_type_name:
+                    continue
+
+                linked_issue = None
+                if hasattr(link, "inwardIssue"):
+                    linked_issue = link.inwardIssue
+                elif hasattr(link, "outwardIssue"):
+                    linked_issue = link.outwardIssue
+
+                if linked_issue and linked_issue.key.startswith("RHAIRFE-"):
+                    return linked_issue.key
+
+        # Fallback: check description for "Parent RFE" reference
+        description = getattr(issue.fields, "description", "") or ""
+        if not isinstance(description, str):
+            description = str(description)
+        match = re.search(r"Parent RFE.*?(RHAIRFE-\d+)", description, re.IGNORECASE)
+        if match:
+            return match.group(1)
 
         return ""
 

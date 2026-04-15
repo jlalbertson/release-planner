@@ -60,6 +60,7 @@ class Candidate(BaseModel):
     summary: str = Field(default="", description="Issue title/summary")
     team: str = Field(default="", description="Owning team")
     components: str = Field(default="", description="Comma-joined component names")
+    labels: str = Field(default="", description="Comma-joined Jira labels")
     target_release: str = Field(default="", description="Target release / fixVersion")
     rfe: str = Field(default="", description="Linked RFE issue key")
     rfe_status: str = Field(default="", description="Status of linked RFE")

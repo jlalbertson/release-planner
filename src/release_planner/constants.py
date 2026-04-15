@@ -46,7 +46,6 @@ CANDIDATE_COLUMNS: list[str] = [col.value for col in CandidateColumn]
 BIG_ROCK_COLUMNS: list[str] = [col.value for col in BigRockColumn]
 
 # Feature tab columns (Engineering Commitments) -- RHAISTRAT issues only
-# Removes: Team, RFE, RFE Status
 FEATURE_COLUMNS: list[str] = [
     "Big Rock",
     "Feature",
@@ -57,19 +56,12 @@ FEATURE_COLUMNS: list[str] = [
     "Component[s]",
     "Target Release",
     "PM",
-    "Architect",
     "Delivery Owner",
-    "Risk Flag",
-    "Change Log",
-    "Refinement complete",
-    "Refinement notes",
+    "RFE",
     "Comments",
-    "RICE Score",
 ]
 
 # RFE tab columns -- RHAIRFE issues only
-# Removes: DP/TP/GA, Team, RFE, RFE Status, Delivery Owner
-# Renames: Feature -> RFE, Issue status -> RFE Status
 RFE_COLUMNS: list[str] = [
     "Big Rock",
     "RFE",
@@ -77,15 +69,8 @@ RFE_COLUMNS: list[str] = [
     "Priority",
     "Title",
     "Component[s]",
-    "Target Release",
     "PM",
-    "Architect",
-    "Risk Flag",
-    "Change Log",
-    "Refinement complete",
-    "Refinement notes",
-    "Comments",
-    "RICE Score",
+    "Labels",
 ]
 
 # Column widths in character units for the Feature tab (ExcelWriter)
@@ -99,14 +84,9 @@ FEATURE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
     "Component[s]": 21.25,
     "Target Release": 15.38,
     "PM": 11.0,
-    "Architect": 13.0,
     "Delivery Owner": 14.13,
-    "Risk Flag": 15.0,
-    "Change Log": 29.63,
-    "Refinement complete": 10.75,
-    "Refinement notes": 38.25,
-    "Comments": 62.38,
-    "RICE Score": 7.38,
+    "RFE": 15.0,
+    "Comments": 38.25,
 }
 
 # Column widths in character units for the RFE tab (ExcelWriter)
@@ -117,15 +97,8 @@ RFE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
     "Priority": 12.13,
     "Title": 21.38,
     "Component[s]": 21.25,
-    "Target Release": 15.38,
     "PM": 11.0,
-    "Architect": 13.0,
-    "Risk Flag": 15.0,
-    "Change Log": 29.63,
-    "Refinement complete": 10.75,
-    "Refinement notes": 38.25,
-    "Comments": 62.38,
-    "RICE Score": 7.38,
+    "Labels": 38.25,
 }
 
 # Column widths in pixels for the Candidates worksheet (used by SheetsWriter)

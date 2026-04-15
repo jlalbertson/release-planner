@@ -31,7 +31,7 @@ class TestValidateConfig:
         )
         assert result.exit_code == 0
         assert "big_rocks.yaml: OK" in result.output
-        assert "11 rocks" in result.output
+        assert "10 rocks" in result.output
 
     def test_validate_with_missing_config(self, runner, tmp_path):
         result = runner.invoke(

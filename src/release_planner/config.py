@@ -94,6 +94,7 @@ class BigRockConfig:
     fix_versions: list[str]
     projects: str
     big_rocks: list[BigRock]
+    exclude_fix_version_patterns: list[str] = field(default_factory=list)
 
 
 def load_big_rocks_config(config_dir: str) -> BigRockConfig:
@@ -112,6 +113,7 @@ def load_big_rocks_config(config_dir: str) -> BigRockConfig:
     release = raw.get("release", "")
     projects = raw.get("projects", "")
     fix_versions_raw = raw.get("fix_versions", [])
+    exclude_fix_version_patterns = raw.get("exclude_fix_version_patterns", [])
 
     rocks_raw = raw.get("big_rocks", [])
     rocks: list[BigRock] = []
@@ -123,6 +125,7 @@ def load_big_rocks_config(config_dir: str) -> BigRockConfig:
         fix_versions=fix_versions_raw,
         projects=projects,
         big_rocks=rocks,
+        exclude_fix_version_patterns=exclude_fix_version_patterns,
     )
 
 

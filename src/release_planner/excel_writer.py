@@ -124,6 +124,7 @@ class ExcelWriter:
         self._apply_conditional_formatting(ws, row_count, columns, "Issue status", "Priority")
         self._apply_row_banding(ws, row_count, len(columns))
         self._apply_hyperlinks_to_column(ws, row_count, columns, "Feature")
+        self._apply_hyperlinks_to_column(ws, row_count, columns, "RFE")
         self._apply_data_validations_for(ws, row_count, columns, is_rfe=False)
         ws.freeze_panes = "C2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{row_count + 1}"
@@ -201,14 +202,9 @@ class ExcelWriter:
             candidate.components,
             candidate.target_release,
             candidate.pm,
-            candidate.architect,
             candidate.delivery_owner,
-            candidate.risk_flag,
-            candidate.change_log,
-            candidate.refinement_complete,
-            candidate.refinement_notes,
-            self._build_comments(candidate),
-            candidate.rice_score if candidate.rice_score is not None else "",
+            candidate.rfe,
+            candidate.labels,
         ]
 
     def _rfe_row(self, candidate: Candidate) -> list:
@@ -220,15 +216,8 @@ class ExcelWriter:
             candidate.priority,
             candidate.summary,
             candidate.components,
-            candidate.target_release,
             candidate.pm,
-            candidate.architect,
-            candidate.risk_flag,
-            candidate.change_log,
-            candidate.refinement_complete,
-            candidate.refinement_notes,
-            self._build_comments(candidate),
-            candidate.rice_score if candidate.rice_score is not None else "",
+            candidate.labels,
         ]
 
     @staticmethod
