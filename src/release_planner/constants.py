@@ -198,6 +198,7 @@ VALIDATION_RFE_STATUS: list[str] = [
 
 # Jira defaults
 JIRA_SERVER_DEFAULT = "https://issues.redhat.com"
+JIRA_BROWSE_URL = "https://redhat.atlassian.net/browse"
 JIRA_MAX_RESULTS_PER_QUERY = 500
 JIRA_REQUEST_TIMEOUT = 30
 JIRA_RETRY_COUNT = 3

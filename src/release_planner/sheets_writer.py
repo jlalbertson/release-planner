@@ -18,6 +18,7 @@ from release_planner.constants import (
     CANDIDATE_COLUMNS,
     HEADER_BG_COLOR,
     HEADER_FONT_COLOR,
+    JIRA_BROWSE_URL,
     PRIORITY_CRITICAL_COLOR,
     STATUS_DONE_COLOR,
     STATUS_IN_PROGRESS_COLOR,
@@ -38,9 +39,6 @@ class SheetsWriter:
 
     # Pattern for valid Jira issue keys
     _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
-
-    # Jira browse URL base for hyperlinks
-    JIRA_BROWSE_URL = "https://issues.redhat.com/browse"
 
     def __init__(
         self,
@@ -540,7 +538,7 @@ class SheetsWriter:
         if not self._ISSUE_KEY_RE.match(issue_key):
             logger.warning("Invalid issue key format, skipping hyperlink: %s", issue_key)
             return issue_key
-        url = f"{self.JIRA_BROWSE_URL}/{issue_key}"
+        url = f"{JIRA_BROWSE_URL}/{issue_key}"
         return f'=HYPERLINK("{url}", "{issue_key}")'
 
     def _get_or_create_worksheet(

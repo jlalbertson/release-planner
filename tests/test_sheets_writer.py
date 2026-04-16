@@ -128,7 +128,7 @@ class TestSheetsWriter:
     def test_issue_key_hyperlink_formula(self, writer_with_data):
         writer, _, _, _, _ = writer_with_data
         formula = writer._build_hyperlink_formula("RHOAIENG-12345")
-        expected = '=HYPERLINK("https://issues.redhat.com/browse/RHOAIENG-12345", "RHOAIENG-12345")'
+        expected = '=HYPERLINK("https://redhat.atlassian.net/browse/RHOAIENG-12345", "RHOAIENG-12345")'
         assert formula == expected
 
     def test_empty_hyperlink_formula(self, writer_with_data):

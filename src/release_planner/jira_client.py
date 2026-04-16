@@ -142,7 +142,9 @@ class JiraClient:
             except Exception as e:
                 if not self._handle_connection_error(e, attempt):
                     raise
-        return []  # unreachable, but satisfies type checker
+        raise RuntimeError(
+            f"Jira query failed after {JIRA_RETRY_COUNT} retries"
+        )
 
     def _search_issues_server(
         self, jira: JIRA, jql: str, max_results: int
@@ -155,6 +157,7 @@ class JiraClient:
         while start_at < max_results:
             remaining = max_results - start_at
             current_page_size = min(page_size, remaining)
+            results: list[Any] = []
 
             for attempt in range(1, JIRA_RETRY_COUNT + 1):
                 try:
@@ -202,6 +205,10 @@ class JiraClient:
                 JIRA_RETRY_COUNT,
             )
             time.sleep(retry_after)
+            if attempt >= JIRA_RETRY_COUNT:
+                raise RuntimeError(
+                    f"Jira rate limit (429) persisted after {JIRA_RETRY_COUNT} retries"
+                ) from e
             return True
         if e.status_code == 400:
             logger.error("Bad JQL query (400): %s\nJQL: %s", e.text, jql)
@@ -727,6 +734,7 @@ class JiraClient:
         if 2 in passes:
             logger.info("  Pass 2 (candidates): %s", rock.name)
             pass2_count = 0
+            pre_pass2_count = len(candidates)
             try:
                 pass2_jql = self._append_open_status_filter(rock.jql)
                 issues = self.search_issues(pass2_jql)
@@ -737,15 +745,19 @@ class JiraClient:
                         candidates.append(candidate)
                         rock_keys.add(key)
                         pass2_count += 1
-                # Apply exclude_keywords filter
+                # Apply exclude_keywords filter to Pass 2 candidates only
                 if rock.exclude_keywords:
-                    before = len(candidates)
-                    candidates = self._apply_exclude_keywords(candidates, rock.exclude_keywords)
-                    # Rebuild rock_keys from remaining candidates
-                    rock_keys = {c.issue_key for c in candidates}
-                    filtered = before - len(candidates)
+                    prior = candidates[:pre_pass2_count]
+                    pass2_only = candidates[pre_pass2_count:]
+                    before = len(pass2_only)
+                    pass2_only = self._apply_exclude_keywords(
+                        pass2_only, rock.exclude_keywords
+                    )
+                    filtered = before - len(pass2_only)
                     if filtered > 0:
                         logger.info("    Filtered %d issues by exclude_keywords", filtered)
+                    candidates = prior + pass2_only
+                    rock_keys = {c.issue_key for c in candidates}
                 logger.info("    Pass 2 found %d candidate issues", pass2_count)
             except RuntimeError as e:
                 logger.warning("    Pass 2 failed for %s: %s", rock.name, e)

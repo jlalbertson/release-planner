@@ -16,6 +16,7 @@ from release_planner.constants import (
     BIG_ROCK_COLUMNS,
     FEATURE_COLUMN_WIDTHS_CHARS,
     FEATURE_COLUMNS,
+    JIRA_BROWSE_URL,
     RFE_COLUMN_WIDTHS_CHARS,
     RFE_COLUMNS,
     VALIDATION_ISSUE_STATUS,
@@ -36,9 +37,6 @@ _PRIORITY_CRITICAL_FONT = Font(color="FF0000", bold=True)
 
 # Valid Jira issue key pattern
 _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
-
-# Jira browse URL base
-JIRA_BROWSE_URL = "https://redhat.atlassian.net/browse"
 
 
 class ExcelWriter:

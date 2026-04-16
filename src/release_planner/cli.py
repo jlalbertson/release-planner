@@ -222,6 +222,7 @@ def run_pipeline(
             big_rocks=active_rocks,
             candidates=all_candidates,
             release=release,
+            fix_versions=fix_versions,
         )
         abs_path = writer.write(output)
         result["output"] = abs_path
