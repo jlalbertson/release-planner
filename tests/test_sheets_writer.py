@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from release_planner.constants import BIG_ROCK_COLUMNS, CANDIDATE_COLUMNS
+from release_planner.constants import BIG_ROCK_COLUMNS, FEATURE_COLUMNS, RFE_COLUMNS
 from release_planner.models import BigRock
 from release_planner.sheets_writer import SheetsWriter
 
@@ -14,7 +14,9 @@ from release_planner.sheets_writer import SheetsWriter
 @pytest.fixture
 def writer_with_data(sample_big_rock, sample_candidates, mock_gspread_client):
     """Create a SheetsWriter with sample data and mocked gspread."""
-    mock_gc, mock_spreadsheet, mock_candidates_ws, mock_big_rocks_ws = mock_gspread_client
+    mock_gc, mock_spreadsheet, mock_features_ws, mock_rfes_ws, mock_big_rocks_ws = (
+        mock_gspread_client
+    )
 
     with patch("release_planner.sheets_writer.gspread") as mock_gspread_mod:
         mock_gspread_mod.authorize.return_value = mock_gc
@@ -31,81 +33,120 @@ def writer_with_data(sample_big_rock, sample_candidates, mock_gspread_client):
         # Replace the gc with our mock
         writer._gc = mock_gc
 
-    return writer, mock_gc, mock_spreadsheet, mock_candidates_ws, mock_big_rocks_ws
+    return (
+        writer, mock_gc, mock_spreadsheet,
+        mock_features_ws, mock_rfes_ws, mock_big_rocks_ws,
+    )
 
 
 class TestSheetsWriter:
     """Tests for SheetsWriter."""
 
     def test_write_opens_spreadsheet_by_id(self, writer_with_data):
-        writer, mock_gc, mock_spreadsheet, _, _ = writer_with_data
+        writer, mock_gc, mock_spreadsheet, _, _, _ = writer_with_data
         writer.write("test-spreadsheet-id")
         mock_gc.open_by_key.assert_called_once_with("test-spreadsheet-id")
 
     def test_write_returns_url(self, writer_with_data):
-        writer, mock_gc, mock_spreadsheet, _, _ = writer_with_data
+        writer, mock_gc, mock_spreadsheet, _, _, _ = writer_with_data
         url = writer.write("test-id")
         assert "docs.google.com" in url
 
     def test_create_and_write_creates_spreadsheet(self, writer_with_data):
-        writer, mock_gc, mock_spreadsheet, _, _ = writer_with_data
+        writer, mock_gc, mock_spreadsheet, _, _, _ = writer_with_data
         # Make worksheet() raise for Sheet1 deletion
-        mock_spreadsheet.worksheet.side_effect = [
-            MagicMock(),  # candidates
-            MagicMock(),  # big rocks
-            Exception("WorksheetNotFound"),  # Sheet1
-        ]
+        original_side_effect = mock_spreadsheet.worksheet.side_effect
+
+        def side_effect_with_sheet1(name):
+            if name == "Sheet1":
+                return MagicMock()
+            return original_side_effect(name)
+
+        mock_spreadsheet.worksheet.side_effect = side_effect_with_sheet1
         writer.create_and_write("Test Spreadsheet")
         mock_gc.create.assert_called_once_with("Test Spreadsheet")
 
     def test_create_and_write_shares_with_emails(self, writer_with_data):
-        writer, mock_gc, mock_spreadsheet, _, _ = writer_with_data
-        mock_spreadsheet.worksheet.side_effect = [
-            MagicMock(),
-            MagicMock(),
-            Exception("not found"),
-        ]
+        writer, mock_gc, mock_spreadsheet, _, _, _ = writer_with_data
+        original_side_effect = mock_spreadsheet.worksheet.side_effect
+
+        def side_effect_with_sheet1(name):
+            if name == "Sheet1":
+                raise Exception("not found")
+            return original_side_effect(name)
+
+        mock_spreadsheet.worksheet.side_effect = side_effect_with_sheet1
         writer.create_and_write("Test", share_with=["user@redhat.com"])
         mock_spreadsheet.share.assert_called_once_with(
             "user@redhat.com", perm_type="user", role="writer"
         )
 
-    def test_candidates_worksheet_correct_column_count(self, writer_with_data):
-        writer, _, mock_spreadsheet, mock_ws, _ = writer_with_data
+    def test_feature_worksheet_correct_column_count(self, writer_with_data):
+        writer, _, mock_spreadsheet, mock_ws, _, _ = writer_with_data
         mock_spreadsheet.worksheet.return_value = mock_ws
-        writer._write_candidates_worksheet(mock_spreadsheet)
+        writer._write_feature_worksheet(mock_spreadsheet)
 
-        # Verify update was called with rows data
         mock_ws.update.assert_called_once()
         rows = mock_ws.update.call_args[0][0]
 
-        # Header should have 20 columns
-        assert len(rows[0]) == len(CANDIDATE_COLUMNS)
-        assert len(rows[0]) == 20
+        assert len(rows[0]) == len(FEATURE_COLUMNS)
+        assert len(rows[0]) == 12
 
-    def test_candidates_worksheet_header_order(self, writer_with_data):
-        writer, _, mock_spreadsheet, mock_ws, _ = writer_with_data
+    def test_feature_worksheet_header_order(self, writer_with_data):
+        writer, _, mock_spreadsheet, mock_ws, _, _ = writer_with_data
         mock_spreadsheet.worksheet.return_value = mock_ws
-        writer._write_candidates_worksheet(mock_spreadsheet)
+        writer._write_feature_worksheet(mock_spreadsheet)
 
         rows = mock_ws.update.call_args[0][0]
         header = rows[0]
         assert header[0] == "Big Rock"
         assert header[1] == "Feature"
         assert header[2] == "Issue status"
-        assert header[-1] == "RICE Score"
+        assert header[-1] == "Comments"
 
-    def test_candidates_data_rows(self, writer_with_data, sample_candidates):
-        writer, _, mock_spreadsheet, mock_ws, _ = writer_with_data
+    def test_feature_data_rows(self, writer_with_data, sample_candidates):
+        writer, _, mock_spreadsheet, mock_ws, _, _ = writer_with_data
         mock_spreadsheet.worksheet.return_value = mock_ws
-        writer._write_candidates_worksheet(mock_spreadsheet)
+        writer._write_feature_worksheet(mock_spreadsheet)
 
         rows = mock_ws.update.call_args[0][0]
-        # 1 header + 3 candidates
-        assert len(rows) == 4
+        # 1 header + 2 non-RFE candidates (RHOAIENG-12345, RHOAIENG-12346)
+        assert len(rows) == 3
+
+    def test_rfe_worksheet_correct_column_count(self, writer_with_data):
+        writer, _, mock_spreadsheet, _, mock_ws, _ = writer_with_data
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        writer._write_rfe_worksheet(mock_spreadsheet)
+
+        mock_ws.update.assert_called_once()
+        rows = mock_ws.update.call_args[0][0]
+
+        assert len(rows[0]) == len(RFE_COLUMNS)
+        assert len(rows[0]) == 8
+
+    def test_rfe_worksheet_header_order(self, writer_with_data):
+        writer, _, mock_spreadsheet, _, mock_ws, _ = writer_with_data
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        writer._write_rfe_worksheet(mock_spreadsheet)
+
+        rows = mock_ws.update.call_args[0][0]
+        header = rows[0]
+        assert header[0] == "Big Rock"
+        assert header[1] == "RFE"
+        assert header[2] == "RFE Status"
+        assert header[-1] == "Labels"
+
+    def test_rfe_data_rows(self, writer_with_data, sample_candidates):
+        writer, _, mock_spreadsheet, _, mock_ws, _ = writer_with_data
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        writer._write_rfe_worksheet(mock_spreadsheet)
+
+        rows = mock_ws.update.call_args[0][0]
+        # 1 header + 1 RFE candidate (RHAIRFE-200)
+        assert len(rows) == 2
 
     def test_big_rocks_worksheet_correct_column_count(self, writer_with_data):
-        writer, _, mock_spreadsheet, _, mock_ws = writer_with_data
+        writer, _, mock_spreadsheet, _, _, mock_ws = writer_with_data
         mock_spreadsheet.worksheet.return_value = mock_ws
         writer._write_big_rocks_worksheet(mock_spreadsheet)
 
@@ -115,7 +156,7 @@ class TestSheetsWriter:
         assert len(rows[0]) == 6
 
     def test_big_rocks_worksheet_header_order(self, writer_with_data):
-        writer, _, mock_spreadsheet, _, mock_ws = writer_with_data
+        writer, _, mock_spreadsheet, _, _, mock_ws = writer_with_data
         mock_spreadsheet.worksheet.return_value = mock_ws
         writer._write_big_rocks_worksheet(mock_spreadsheet)
 
@@ -126,30 +167,28 @@ class TestSheetsWriter:
         assert header[-1] == "Notes"
 
     def test_issue_key_hyperlink_formula(self, writer_with_data):
-        writer, _, _, _, _ = writer_with_data
+        writer, _, _, _, _, _ = writer_with_data
         formula = writer._build_hyperlink_formula("RHOAIENG-12345")
         expected = '=HYPERLINK("https://redhat.atlassian.net/browse/RHOAIENG-12345", "RHOAIENG-12345")'
         assert formula == expected
 
     def test_empty_hyperlink_formula(self, writer_with_data):
-        writer, _, _, _, _ = writer_with_data
+        writer, _, _, _, _, _ = writer_with_data
         assert writer._build_hyperlink_formula("") == ""
 
-    def test_data_written_via_batch_update(self, writer_with_data):
+    def test_feature_data_written_via_batch_update(self, writer_with_data):
         """Verify data is written via worksheet.update() (batch), not cell-by-cell."""
-        writer, _, mock_spreadsheet, mock_ws, _ = writer_with_data
+        writer, _, mock_spreadsheet, mock_ws, _, _ = writer_with_data
         mock_spreadsheet.worksheet.return_value = mock_ws
-        writer._write_candidates_worksheet(mock_spreadsheet)
+        writer._write_feature_worksheet(mock_spreadsheet)
 
-        # worksheet.update() should be called once (batch)
         assert mock_ws.update.call_count == 1
-        # Should pass value_input_option for HYPERLINK formulas
         _, kwargs = mock_ws.update.call_args
         assert kwargs.get("value_input_option") == "USER_ENTERED"
 
     def test_formatting_via_batch_update(self, writer_with_data):
         """Verify formatting is applied via spreadsheet.batch_update()."""
-        writer, _, mock_spreadsheet, _, _ = writer_with_data
+        writer, _, mock_spreadsheet, _, _, _ = writer_with_data
         writer._apply_formatting(mock_spreadsheet)
 
         mock_spreadsheet.batch_update.assert_called_once()
@@ -182,11 +221,17 @@ class TestSheetsWriter:
         mock_ws = MagicMock()
         mock_spreadsheet = MagicMock()
         mock_spreadsheet.worksheet.return_value = mock_ws
-        writer._write_candidates_worksheet(mock_spreadsheet)
+        writer._write_feature_worksheet(mock_spreadsheet)
 
         rows = mock_ws.update.call_args[0][0]
         # Only header, no data rows
         assert len(rows) == 1
+
+    def test_feature_rfe_split(self, writer_with_data, sample_candidates):
+        """Verify that candidates are correctly split between features and RFEs."""
+        writer, _, _, _, _, _ = writer_with_data
+        assert len(writer._features["MaaS"]) == 2  # RHOAIENG-12345, RHOAIENG-12346
+        assert len(writer._rfes["MaaS"]) == 1  # RHAIRFE-200
 
 
 class TestLoadCredentials:

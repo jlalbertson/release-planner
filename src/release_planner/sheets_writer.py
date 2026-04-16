@@ -1,4 +1,4 @@
-"""Google Sheets writer: writes candidate and Big Rock data via gspread."""
+"""Google Sheets writer: writes Feature, RFE, and Big Rock data via gspread."""
 
 from __future__ import annotations
 
@@ -14,12 +14,14 @@ from google.oauth2.service_account import Credentials
 from release_planner.constants import (
     BIG_ROCK_COLUMN_WIDTHS,
     BIG_ROCK_COLUMNS,
-    CANDIDATE_COLUMN_WIDTHS,
-    CANDIDATE_COLUMNS,
+    FEATURE_COLUMN_WIDTHS,
+    FEATURE_COLUMNS,
     HEADER_BG_COLOR,
     HEADER_FONT_COLOR,
     JIRA_BROWSE_URL,
     PRIORITY_CRITICAL_COLOR,
+    RFE_COLUMN_WIDTHS,
+    RFE_COLUMNS,
     STATUS_DONE_COLOR,
     STATUS_IN_PROGRESS_COLOR,
 )
@@ -60,6 +62,17 @@ class SheetsWriter:
         self._release = release
         self._gc = gspread.authorize(credentials)
 
+        # Split candidates into features (RHAISTRAT) and RFEs (RHAIRFE)
+        self._features: dict[str, list[Candidate]] = {}
+        self._rfes: dict[str, list[Candidate]] = {}
+        for rock_name, cands in self._candidates.items():
+            self._features[rock_name] = [
+                c for c in cands if not c.issue_key.startswith("RHAIRFE-")
+            ]
+            self._rfes[rock_name] = [
+                c for c in cands if c.issue_key.startswith("RHAIRFE-")
+            ]
+
     def write(self, spreadsheet_id: str) -> str:
         """Write data to an existing Google Spreadsheet.
 
@@ -72,7 +85,8 @@ class SheetsWriter:
         logger.info("Opening spreadsheet: %s", spreadsheet_id)
         spreadsheet = self._gc.open_by_key(spreadsheet_id)
 
-        self._write_candidates_worksheet(spreadsheet)
+        self._write_feature_worksheet(spreadsheet)
+        self._write_rfe_worksheet(spreadsheet)
         self._write_big_rocks_worksheet(spreadsheet)
         self._apply_formatting(spreadsheet)
 
@@ -97,7 +111,8 @@ class SheetsWriter:
         logger.info("Creating new spreadsheet: %s", title)
         spreadsheet = self._gc.create(title)
 
-        self._write_candidates_worksheet(spreadsheet)
+        self._write_feature_worksheet(spreadsheet)
+        self._write_rfe_worksheet(spreadsheet)
         self._write_big_rocks_worksheet(spreadsheet)
         self._apply_formatting(spreadsheet)
 
@@ -106,7 +121,6 @@ class SheetsWriter:
             default_sheet = spreadsheet.worksheet("Sheet1")
             spreadsheet.del_worksheet(default_sheet)
         except Exception:
-            # WorksheetNotFound or any other error -- Sheet1 may not exist
             pass
 
         # Share with specified emails
@@ -119,33 +133,45 @@ class SheetsWriter:
         logger.info("Created spreadsheet: %s", url)
         return url
 
-    def _write_candidates_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
-        """Write the '{release} Candidates' worksheet. Clears existing data first."""
+    def _write_feature_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
+        """Write the 'Engineering Commitments {release}' worksheet (RHAISTRAT features)."""
         ws_name = f"Engineering Commitments {self._release}"
         worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
 
-        # Build all rows: header + data
         rows: list[list[str | int | float | None]] = []
-        rows.append(list(CANDIDATE_COLUMNS))
+        rows.append(list(FEATURE_COLUMNS))
 
         for rock in self._big_rocks:
-            rock_candidates = self._candidates.get(rock.name, [])
-            for candidate in rock_candidates:
-                row = self._candidate_to_row(candidate)
-                rows.append(row)
+            for candidate in self._features.get(rock.name, []):
+                rows.append(self._feature_to_row(candidate))
 
-        # Write all data in a single batch update
+        if rows:
+            worksheet.clear()
+            worksheet.update(rows, value_input_option="USER_ENTERED")
+            logger.info("Wrote %d rows to '%s' worksheet", len(rows) - 1, ws_name)
+
+    def _write_rfe_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
+        """Write the 'RFEs {release}' worksheet (RHAIRFE issues)."""
+        ws_name = f"RFEs {self._release}"
+        worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
+
+        rows: list[list[str | int | float | None]] = []
+        rows.append(list(RFE_COLUMNS))
+
+        for rock in self._big_rocks:
+            for candidate in self._rfes.get(rock.name, []):
+                rows.append(self._rfe_to_row(candidate))
+
         if rows:
             worksheet.clear()
             worksheet.update(rows, value_input_option="USER_ENTERED")
             logger.info("Wrote %d rows to '%s' worksheet", len(rows) - 1, ws_name)
 
     def _write_big_rocks_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
-        """Write the 'Big Rocks' worksheet. Clears existing data first."""
+        """Write the 'Summit Big Rocks' worksheet. Clears existing data first."""
         ws_name = "Summit Big Rocks"
         worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
 
-        # Build all rows: header + data
         rows: list[list[str | int | float | None]] = []
         rows.append(list(BIG_ROCK_COLUMNS))
 
@@ -160,258 +186,67 @@ class SheetsWriter:
             ]
             rows.append(row)
 
-        # Write all data in a single batch update
         if rows:
             worksheet.clear()
             worksheet.update(rows, value_input_option="USER_ENTERED")
             logger.info("Wrote %d rows to '%s' worksheet", len(rows) - 1, ws_name)
 
     def _apply_formatting(self, spreadsheet: gspread.Spreadsheet) -> None:
-        """Apply header formatting, conditional formatting, column widths, and frozen rows.
-
-        Uses batch_update requests to the Sheets API for efficiency.
-        """
+        """Apply header formatting, conditional formatting, column widths, and frozen rows."""
         requests: list[dict] = []
 
-        # Get worksheet IDs
-        candidates_ws_name = f"Engineering Commitments {self._release}"
+        features_ws_name = f"Engineering Commitments {self._release}"
+        rfes_ws_name = f"RFEs {self._release}"
         big_rocks_ws_name = "Summit Big Rocks"
 
-        candidates_ws_id = None
+        features_ws_id = None
+        rfes_ws_id = None
         big_rocks_ws_id = None
 
         for ws in spreadsheet.worksheets():
-            if ws.title == candidates_ws_name:
-                candidates_ws_id = ws.id
+            if ws.title == features_ws_name:
+                features_ws_id = ws.id
+            elif ws.title == rfes_ws_name:
+                rfes_ws_id = ws.id
             elif ws.title == big_rocks_ws_name:
                 big_rocks_ws_id = ws.id
 
-        # --- Candidates worksheet formatting ---
-        if candidates_ws_id is not None:
-            num_cols = len(CANDIDATE_COLUMNS)
-
-            # Freeze header row and first 2 columns (Big Rock + Issue key)
-            requests.append(
-                {
-                    "updateSheetProperties": {
-                        "properties": {
-                            "sheetId": candidates_ws_id,
-                            "gridProperties": {
-                                "frozenRowCount": 1,
-                                "frozenColumnCount": 2,
-                            },
-                        },
-                        "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
-                    }
-                }
+        # --- Feature worksheet formatting ---
+        if features_ws_id is not None:
+            total_features = sum(
+                len(self._features.get(r.name, [])) for r in self._big_rocks
             )
-
-            # Header row formatting: bold, dark background, white text
-            requests.append(
-                {
-                    "repeatCell": {
-                        "range": {
-                            "sheetId": candidates_ws_id,
-                            "startRowIndex": 0,
-                            "endRowIndex": 1,
-                            "startColumnIndex": 0,
-                            "endColumnIndex": num_cols,
-                        },
-                        "cell": {
-                            "userEnteredFormat": {
-                                "backgroundColor": HEADER_BG_COLOR,
-                                "textFormat": {
-                                    "foregroundColor": HEADER_FONT_COLOR,
-                                    "bold": True,
-                                },
-                            }
-                        },
-                        "fields": ("userEnteredFormat(backgroundColor,textFormat)"),
-                    }
-                }
-            )
-
-            # Column widths
-            for i, col_name in enumerate(CANDIDATE_COLUMNS):
-                width = CANDIDATE_COLUMN_WIDTHS.get(col_name, 100)
-                requests.append(
-                    {
-                        "updateDimensionProperties": {
-                            "range": {
-                                "sheetId": candidates_ws_id,
-                                "dimension": "COLUMNS",
-                                "startIndex": i,
-                                "endIndex": i + 1,
-                            },
-                            "properties": {"pixelSize": width},
-                            "fields": "pixelSize",
-                        }
-                    }
+            requests.extend(
+                self._worksheet_formatting_requests(
+                    ws_id=features_ws_id,
+                    columns=FEATURE_COLUMNS,
+                    column_widths=FEATURE_COLUMN_WIDTHS,
+                    total_rows=1 + total_features,
+                    status_col_name="Issue status",
+                    priority_col_name="Priority",
                 )
-
-            # Auto-filter on all columns
-            total_rows = 1 + sum(len(self._candidates.get(r.name, [])) for r in self._big_rocks)
-            requests.append(
-                {
-                    "setBasicFilter": {
-                        "filter": {
-                            "range": {
-                                "sheetId": candidates_ws_id,
-                                "startRowIndex": 0,
-                                "endRowIndex": total_rows,
-                                "startColumnIndex": 0,
-                                "endColumnIndex": num_cols,
-                            }
-                        }
-                    }
-                }
             )
 
-            # Status-based conditional formatting: Done/Closed = green
-            status_col_idx = CANDIDATE_COLUMNS.index("Issue status")
-            requests.append(
-                {
-                    "addConditionalFormatRule": {
-                        "rule": {
-                            "ranges": [
-                                {
-                                    "sheetId": candidates_ws_id,
-                                    "startRowIndex": 1,
-                                    "startColumnIndex": status_col_idx,
-                                    "endColumnIndex": status_col_idx + 1,
-                                }
-                            ],
-                            "booleanRule": {
-                                "condition": {
-                                    "type": "TEXT_EQ",
-                                    "values": [{"userEnteredValue": "Closed"}],
-                                },
-                                "format": {
-                                    "backgroundColor": STATUS_DONE_COLOR,
-                                },
-                            },
-                        },
-                        "index": 0,
-                    }
-                }
+        # --- RFE worksheet formatting ---
+        if rfes_ws_id is not None:
+            total_rfes = sum(
+                len(self._rfes.get(r.name, [])) for r in self._big_rocks
             )
-
-            # Status: Done = green
-            requests.append(
-                {
-                    "addConditionalFormatRule": {
-                        "rule": {
-                            "ranges": [
-                                {
-                                    "sheetId": candidates_ws_id,
-                                    "startRowIndex": 1,
-                                    "startColumnIndex": status_col_idx,
-                                    "endColumnIndex": status_col_idx + 1,
-                                }
-                            ],
-                            "booleanRule": {
-                                "condition": {
-                                    "type": "TEXT_EQ",
-                                    "values": [{"userEnteredValue": "Done"}],
-                                },
-                                "format": {
-                                    "backgroundColor": STATUS_DONE_COLOR,
-                                },
-                            },
-                        },
-                        "index": 1,
-                    }
-                }
-            )
-
-            # Status: In Progress = yellow
-            requests.append(
-                {
-                    "addConditionalFormatRule": {
-                        "rule": {
-                            "ranges": [
-                                {
-                                    "sheetId": candidates_ws_id,
-                                    "startRowIndex": 1,
-                                    "startColumnIndex": status_col_idx,
-                                    "endColumnIndex": status_col_idx + 1,
-                                }
-                            ],
-                            "booleanRule": {
-                                "condition": {
-                                    "type": "TEXT_EQ",
-                                    "values": [{"userEnteredValue": "In Progress"}],
-                                },
-                                "format": {
-                                    "backgroundColor": STATUS_IN_PROGRESS_COLOR,
-                                },
-                            },
-                        },
-                        "index": 2,
-                    }
-                }
-            )
-
-            # Priority: Blocker/Critical = red text
-            priority_col_idx = CANDIDATE_COLUMNS.index("Priority")
-            for priority_val in ("Blocker", "Critical"):
-                requests.append(
-                    {
-                        "addConditionalFormatRule": {
-                            "rule": {
-                                "ranges": [
-                                    {
-                                        "sheetId": candidates_ws_id,
-                                        "startRowIndex": 1,
-                                        "startColumnIndex": priority_col_idx,
-                                        "endColumnIndex": priority_col_idx + 1,
-                                    }
-                                ],
-                                "booleanRule": {
-                                    "condition": {
-                                        "type": "TEXT_EQ",
-                                        "values": [{"userEnteredValue": priority_val}],
-                                    },
-                                    "format": {
-                                        "textFormat": {
-                                            "foregroundColor": PRIORITY_CRITICAL_COLOR,
-                                            "bold": True,
-                                        },
-                                    },
-                                },
-                            },
-                            "index": 0,
-                        }
-                    }
+            requests.extend(
+                self._worksheet_formatting_requests(
+                    ws_id=rfes_ws_id,
+                    columns=RFE_COLUMNS,
+                    column_widths=RFE_COLUMN_WIDTHS,
+                    total_rows=1 + total_rfes,
+                    status_col_name="RFE Status",
+                    priority_col_name="Priority",
                 )
-
-            # Alternating row banding
-            requests.append(
-                {
-                    "addBanding": {
-                        "bandedRange": {
-                            "range": {
-                                "sheetId": candidates_ws_id,
-                                "startRowIndex": 0,
-                                "endRowIndex": total_rows,
-                                "startColumnIndex": 0,
-                                "endColumnIndex": num_cols,
-                            },
-                            "rowProperties": {
-                                "headerColor": HEADER_BG_COLOR,
-                                "firstBandColor": {"red": 1.0, "green": 1.0, "blue": 1.0},
-                                "secondBandColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
-                            },
-                        }
-                    }
-                }
             )
 
         # --- Big Rocks worksheet formatting ---
         if big_rocks_ws_id is not None:
             num_cols_br = len(BIG_ROCK_COLUMNS)
 
-            # Freeze header row
             requests.append(
                 {
                     "updateSheetProperties": {
@@ -424,7 +259,6 @@ class SheetsWriter:
                 }
             )
 
-            # Header row formatting
             requests.append(
                 {
                     "repeatCell": {
@@ -449,7 +283,6 @@ class SheetsWriter:
                 }
             )
 
-            # Column widths
             for i, col_name in enumerate(BIG_ROCK_COLUMNS):
                 width = BIG_ROCK_COLUMN_WIDTHS.get(col_name, 100)
                 requests.append(
@@ -472,67 +305,228 @@ class SheetsWriter:
             spreadsheet.batch_update({"requests": requests})
             logger.info("Applied formatting (%d requests)", len(requests))
 
-    def _candidate_to_row(self, candidate: Candidate) -> list[str | int | float | None]:
-        """Convert a Candidate to a row of cell values matching CANDIDATE_COLUMNS order.
+    @staticmethod
+    def _worksheet_formatting_requests(
+        ws_id: int,
+        columns: list[str],
+        column_widths: dict[str, int],
+        total_rows: int,
+        status_col_name: str,
+        priority_col_name: str,
+    ) -> list[dict]:
+        """Build Sheets API formatting requests for a data worksheet."""
+        requests: list[dict] = []
+        num_cols = len(columns)
 
-        Issue key and RFE columns use =HYPERLINK() formulas.
-        """
-        issue_key_cell = self._build_hyperlink_formula(candidate.issue_key)
-        rfe_cell = self._build_hyperlink_formula(candidate.rfe) if candidate.rfe else ""
+        # Freeze header row and first 2 columns
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": ws_id,
+                        "gridProperties": {
+                            "frozenRowCount": 1,
+                            "frozenColumnCount": 2,
+                        },
+                    },
+                    "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
+                }
+            }
+        )
 
-        # Add source_pass info to comments if not already there
-        comments = candidate.comments
-        if candidate.source_pass and candidate.source_pass not in (comments or ""):
-            if comments:
-                comments = f"{comments} [source: {candidate.source_pass}]"
-            else:
-                comments = f"[source: {candidate.source_pass}]"
+        # Header row formatting
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws_id,
+                        "startRowIndex": 0,
+                        "endRowIndex": 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": num_cols,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": HEADER_BG_COLOR,
+                            "textFormat": {
+                                "foregroundColor": HEADER_FONT_COLOR,
+                                "bold": True,
+                            },
+                        }
+                    },
+                    "fields": ("userEnteredFormat(backgroundColor,textFormat)"),
+                }
+            }
+        )
 
+        # Column widths
+        for i, col_name in enumerate(columns):
+            width = column_widths.get(col_name, 100)
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": i,
+                            "endIndex": i + 1,
+                        },
+                        "properties": {"pixelSize": width},
+                        "fields": "pixelSize",
+                    }
+                }
+            )
+
+        # Auto-filter
+        requests.append(
+            {
+                "setBasicFilter": {
+                    "filter": {
+                        "range": {
+                            "sheetId": ws_id,
+                            "startRowIndex": 0,
+                            "endRowIndex": total_rows,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": num_cols,
+                        }
+                    }
+                }
+            }
+        )
+
+        # Status conditional formatting
+        if status_col_name in columns:
+            status_col_idx = columns.index(status_col_name)
+
+            for status_val, color in [
+                ("Closed", STATUS_DONE_COLOR),
+                ("Done", STATUS_DONE_COLOR),
+                ("In Progress", STATUS_IN_PROGRESS_COLOR),
+            ]:
+                requests.append(
+                    {
+                        "addConditionalFormatRule": {
+                            "rule": {
+                                "ranges": [
+                                    {
+                                        "sheetId": ws_id,
+                                        "startRowIndex": 1,
+                                        "startColumnIndex": status_col_idx,
+                                        "endColumnIndex": status_col_idx + 1,
+                                    }
+                                ],
+                                "booleanRule": {
+                                    "condition": {
+                                        "type": "TEXT_EQ",
+                                        "values": [{"userEnteredValue": status_val}],
+                                    },
+                                    "format": {"backgroundColor": color},
+                                },
+                            },
+                            "index": 0,
+                        }
+                    }
+                )
+
+        # Priority conditional formatting
+        if priority_col_name in columns:
+            priority_col_idx = columns.index(priority_col_name)
+            for priority_val in ("Blocker", "Critical"):
+                requests.append(
+                    {
+                        "addConditionalFormatRule": {
+                            "rule": {
+                                "ranges": [
+                                    {
+                                        "sheetId": ws_id,
+                                        "startRowIndex": 1,
+                                        "startColumnIndex": priority_col_idx,
+                                        "endColumnIndex": priority_col_idx + 1,
+                                    }
+                                ],
+                                "booleanRule": {
+                                    "condition": {
+                                        "type": "TEXT_EQ",
+                                        "values": [{"userEnteredValue": priority_val}],
+                                    },
+                                    "format": {
+                                        "textFormat": {
+                                            "foregroundColor": PRIORITY_CRITICAL_COLOR,
+                                            "bold": True,
+                                        },
+                                    },
+                                },
+                            },
+                            "index": 0,
+                        }
+                    }
+                )
+
+        # Alternating row banding
+        requests.append(
+            {
+                "addBanding": {
+                    "bandedRange": {
+                        "range": {
+                            "sheetId": ws_id,
+                            "startRowIndex": 0,
+                            "endRowIndex": total_rows,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": num_cols,
+                        },
+                        "rowProperties": {
+                            "headerColor": HEADER_BG_COLOR,
+                            "firstBandColor": {"red": 1.0, "green": 1.0, "blue": 1.0},
+                            "secondBandColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
+                        },
+                    }
+                }
+            }
+        )
+
+        return requests
+
+    def _feature_to_row(self, candidate: Candidate) -> list[str | int | float | None]:
+        """Convert a Candidate to a row matching FEATURE_COLUMNS order."""
         s = self._sanitize_cell
         return [
             candidate.big_rock,
-            issue_key_cell,
+            self._build_hyperlink_formula(candidate.issue_key),
             candidate.status,
             candidate.priority,
             candidate.phase,
             s(candidate.summary),
-            s(candidate.team),
             s(candidate.components),
             candidate.target_release,
-            rfe_cell,
-            candidate.rfe_status,
             s(candidate.pm),
-            s(candidate.architect),
             s(candidate.delivery_owner),
-            candidate.risk_flag,
-            s(candidate.change_log),
-            candidate.refinement_complete,
-            s(candidate.refinement_notes),
-            s(comments),
-            candidate.rice_score if candidate.rice_score is not None else "",
+            self._build_hyperlink_formula(candidate.rfe) if candidate.rfe else "",
+            candidate.labels,
+        ]
+
+    def _rfe_to_row(self, candidate: Candidate) -> list[str | int | float | None]:
+        """Convert a Candidate to a row matching RFE_COLUMNS order."""
+        s = self._sanitize_cell
+        return [
+            candidate.big_rock,
+            self._build_hyperlink_formula(candidate.issue_key),
+            candidate.status,
+            candidate.priority,
+            s(candidate.summary),
+            s(candidate.components),
+            s(candidate.pm),
+            candidate.labels,
         ]
 
     @staticmethod
     def _sanitize_cell(value: str) -> str:
-        """Sanitize a string value to prevent formula injection in Google Sheets.
-
-        Values starting with =, +, -, or @ could be interpreted as formulas
-        when written with USER_ENTERED mode. Prefix with a single quote to force
-        text interpretation.
-        """
+        """Sanitize a string value to prevent formula injection in Google Sheets."""
         if isinstance(value, str) and value and value[0] in ("=", "+", "-", "@"):
             return f"'{value}"
         return value
 
     def _build_hyperlink_formula(self, issue_key: str) -> str:
-        """Return a =HYPERLINK() formula for a Jira issue key.
-
-        Args:
-            issue_key: Jira issue key (e.g. RHOAIENG-12345).
-
-        Returns:
-            Google Sheets HYPERLINK formula string, or plain text if key is invalid.
-        """
+        """Return a =HYPERLINK() formula for a Jira issue key."""
         if not issue_key:
             return ""
         if not self._ISSUE_KEY_RE.match(issue_key):
@@ -546,15 +540,7 @@ class SheetsWriter:
         spreadsheet: gspread.Spreadsheet,
         name: str,
     ) -> gspread.Worksheet:
-        """Get an existing worksheet by name, or create a new one.
-
-        Args:
-            spreadsheet: gspread Spreadsheet object.
-            name: Worksheet name.
-
-        Returns:
-            gspread Worksheet object.
-        """
+        """Get an existing worksheet by name, or create a new one."""
         try:
             worksheet = spreadsheet.worksheet(name)
             logger.debug("Found existing worksheet: %s", name)
@@ -568,12 +554,6 @@ class SheetsWriter:
         """Load Google service account credentials from environment.
 
         Checks GOOGLE_CREDENTIALS_FILE first, then GOOGLE_CREDENTIALS_JSON.
-
-        Returns:
-            Scoped Google service account Credentials.
-
-        Raises:
-            RuntimeError: If neither env var is set or credentials are invalid.
         """
         creds_file = os.environ.get("GOOGLE_CREDENTIALS_FILE")
         creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")

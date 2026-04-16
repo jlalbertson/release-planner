@@ -224,19 +224,27 @@ def mock_gspread_client():
     mock_spreadsheet.url = "https://docs.google.com/spreadsheets/d/test-id/edit"
 
     # Mock worksheets
-    mock_candidates_ws = MagicMock()
-    mock_candidates_ws.id = 0
-    mock_candidates_ws.title = "Engineering Commitments 3.5"
+    mock_features_ws = MagicMock()
+    mock_features_ws.id = 0
+    mock_features_ws.title = "Engineering Commitments 3.5"
+
+    mock_rfes_ws = MagicMock()
+    mock_rfes_ws.id = 1
+    mock_rfes_ws.title = "RFEs 3.5"
 
     mock_big_rocks_ws = MagicMock()
-    mock_big_rocks_ws.id = 1
+    mock_big_rocks_ws.id = 2
     mock_big_rocks_ws.title = "Summit Big Rocks"
 
-    mock_spreadsheet.worksheets.return_value = [mock_candidates_ws, mock_big_rocks_ws]
+    mock_spreadsheet.worksheets.return_value = [
+        mock_features_ws, mock_rfes_ws, mock_big_rocks_ws
+    ]
 
     def worksheet_side_effect(name):
         if "Engineering Commitments" in name:
-            return mock_candidates_ws
+            return mock_features_ws
+        elif "RFEs" in name:
+            return mock_rfes_ws
         elif name == "Summit Big Rocks":
             return mock_big_rocks_ws
         raise Exception(f"Unexpected worksheet name: {name}")
@@ -246,4 +254,4 @@ def mock_gspread_client():
     mock_gc.open_by_key.return_value = mock_spreadsheet
     mock_gc.create.return_value = mock_spreadsheet
 
-    return mock_gc, mock_spreadsheet, mock_candidates_ws, mock_big_rocks_ws
+    return mock_gc, mock_spreadsheet, mock_features_ws, mock_rfes_ws, mock_big_rocks_ws

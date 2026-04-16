@@ -1,31 +1,6 @@
-"""Shared constants: column enums, style constants, defaults, rate limiting."""
+"""Shared constants: column definitions, style constants, defaults, rate limiting."""
 
 from enum import StrEnum
-
-
-class CandidateColumn(StrEnum):
-    """Column headers for the {release} Candidates worksheet, in order."""
-
-    BIG_ROCK = "Big Rock"
-    ISSUE_KEY = "Feature"
-    ISSUE_STATUS = "Issue status"
-    PRIORITY = "Priority"
-    PHASE = "DP/TP/GA"
-    TITLE = "Title"
-    TEAM = "Team"
-    COMPONENTS = "Component[s]"
-    TARGET_RELEASE = "Target Release"
-    RFE = "RFE"
-    RFE_STATUS = "RFE Status"
-    PM = "PM"
-    ARCHITECT = "Architect"
-    DELIVERY_OWNER = "Delivery Owner"
-    RISK_FLAG = "Risk Flag"
-    CHANGE_LOG = "Change Log"
-    REFINEMENT_COMPLETE = "Refinement complete"
-    REFINEMENT_NOTES = "Refinement notes"
-    COMMENTS = "Comments"
-    RICE_SCORE = "RICE Score"
 
 
 class BigRockColumn(StrEnum):
@@ -38,9 +13,6 @@ class BigRockColumn(StrEnum):
     OWNER = "Owner"
     NOTES = "Notes"
 
-
-# Ordered list of candidate column headers (for worksheet generation)
-CANDIDATE_COLUMNS: list[str] = [col.value for col in CandidateColumn]
 
 # Ordered list of big rock column headers (for worksheet generation)
 BIG_ROCK_COLUMNS: list[str] = [col.value for col in BigRockColumn]
@@ -101,53 +73,32 @@ RFE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
     "Labels": 38.25,
 }
 
-# Column widths in pixels for the Candidates worksheet (used by SheetsWriter)
-CANDIDATE_COLUMN_WIDTHS: dict[str, int] = {
-    CandidateColumn.BIG_ROCK: 132,
-    CandidateColumn.ISSUE_KEY: 98,
-    CandidateColumn.ISSUE_STATUS: 94,
-    CandidateColumn.PRIORITY: 91,
-    CandidateColumn.PHASE: 60,
-    CandidateColumn.TITLE: 160,
-    CandidateColumn.TEAM: 128,
-    CandidateColumn.COMPONENTS: 159,
-    CandidateColumn.TARGET_RELEASE: 115,
-    CandidateColumn.RFE: 98,
-    CandidateColumn.RFE_STATUS: 98,
-    CandidateColumn.PM: 83,
-    CandidateColumn.ARCHITECT: 98,
-    CandidateColumn.DELIVERY_OWNER: 106,
-    CandidateColumn.RISK_FLAG: 113,
-    CandidateColumn.CHANGE_LOG: 222,
-    CandidateColumn.REFINEMENT_COMPLETE: 81,
-    CandidateColumn.REFINEMENT_NOTES: 287,
-    CandidateColumn.COMMENTS: 468,
-    CandidateColumn.RICE_SCORE: 55,
+# Column widths in pixels for the Feature tab (SheetsWriter)
+FEATURE_COLUMN_WIDTHS: dict[str, int] = {
+    "Big Rock": 132,
+    "Feature": 98,
+    "Issue status": 94,
+    "Priority": 91,
+    "DP/TP/GA": 60,
+    "Title": 160,
+    "Component[s]": 159,
+    "Target Release": 115,
+    "PM": 83,
+    "Delivery Owner": 106,
+    "RFE": 98,
+    "Comments": 287,
 }
 
-# Column widths in character units for the Candidates worksheet (used by ExcelWriter)
-# Values taken from the reference "Engineering Commitments 3.5" sheet.
-CANDIDATE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
-    CandidateColumn.BIG_ROCK: 17.63,
-    CandidateColumn.ISSUE_KEY: 13.0,
-    CandidateColumn.ISSUE_STATUS: 12.5,
-    CandidateColumn.PRIORITY: 12.13,
-    CandidateColumn.PHASE: 8.0,
-    CandidateColumn.TITLE: 21.38,
-    CandidateColumn.TEAM: 17.0,
-    CandidateColumn.COMPONENTS: 21.25,
-    CandidateColumn.TARGET_RELEASE: 15.38,
-    CandidateColumn.RFE: 13.0,
-    CandidateColumn.RFE_STATUS: 13.0,
-    CandidateColumn.PM: 11.0,
-    CandidateColumn.ARCHITECT: 13.0,
-    CandidateColumn.DELIVERY_OWNER: 14.13,
-    CandidateColumn.RISK_FLAG: 15.0,
-    CandidateColumn.CHANGE_LOG: 29.63,
-    CandidateColumn.REFINEMENT_COMPLETE: 10.75,
-    CandidateColumn.REFINEMENT_NOTES: 38.25,
-    CandidateColumn.COMMENTS: 62.38,
-    CandidateColumn.RICE_SCORE: 7.38,
+# Column widths in pixels for the RFE tab (SheetsWriter)
+RFE_COLUMN_WIDTHS: dict[str, int] = {
+    "Big Rock": 132,
+    "RFE": 98,
+    "RFE Status": 98,
+    "Priority": 91,
+    "Title": 160,
+    "Component[s]": 159,
+    "PM": 83,
+    "Labels": 287,
 }
 
 # Column widths in pixels for the Big Rocks worksheet (used by SheetsWriter)

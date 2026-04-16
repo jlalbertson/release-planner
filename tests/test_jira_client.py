@@ -25,7 +25,6 @@ def jira_client():
     )
     client._jira = MagicMock()
     client._jira.server_info.return_value = {"version": "8.0"}
-    client._jira._is_cloud = False  # Route to Server/DC search path
     return client
 
 
@@ -245,6 +244,71 @@ class TestFetchCandidatesForRock:
         )
 
         assert len(candidates) == 0
+
+
+class TestAppendOpenStatusFilter:
+    """Tests for JiraClient._append_open_status_filter()."""
+
+    def test_appends_filter_no_order_by(self):
+        jql = "project = TEST"
+        result = JiraClient._append_open_status_filter(jql)
+        assert "status NOT IN" in result
+        assert result.startswith("project = TEST AND")
+
+    def test_inserts_before_order_by(self):
+        jql = "project = TEST ORDER BY priority ASC"
+        result = JiraClient._append_open_status_filter(jql)
+        assert "status NOT IN" in result
+        assert result.endswith("ORDER BY priority ASC")
+        assert "AND status NOT IN" in result
+
+    def test_case_insensitive_order_by(self):
+        jql = "project = TEST order by key ASC"
+        result = JiraClient._append_open_status_filter(jql)
+        assert "status NOT IN" in result
+        assert "order by key ASC" in result
+
+    def test_mixed_case_order_by(self):
+        jql = "project = TEST Order By priority DESC"
+        result = JiraClient._append_open_status_filter(jql)
+        assert "status NOT IN" in result
+        assert "Order By priority DESC" in result
+
+    def test_order_by_with_extra_whitespace(self):
+        jql = "project = TEST ORDER  BY priority ASC"
+        result = JiraClient._append_open_status_filter(jql)
+        assert "status NOT IN" in result
+        assert "ORDER  BY priority ASC" in result
+
+    def test_excludes_all_closed_statuses(self):
+        result = JiraClient._append_open_status_filter("project = TEST")
+        for status in ("Closed", "Done", "Resolved", "Cancelled"):
+            assert f'"{status}"' in result
+
+
+class TestCloudDetection:
+    """Tests for Cloud vs Server detection."""
+
+    def test_atlassian_net_detected_as_cloud(self):
+        client = JiraClient(
+            server="https://redhat.atlassian.net",
+            token="test-token",
+        )
+        assert client._is_cloud is True
+
+    def test_issues_redhat_detected_as_server(self):
+        client = JiraClient(
+            server="https://issues.redhat.com",
+            token="test-token",
+        )
+        assert client._is_cloud is False
+
+    def test_custom_server_detected_as_server(self):
+        client = JiraClient(
+            server="https://jira.example.com",
+            token="test-token",
+        )
+        assert client._is_cloud is False
 
 
 class TestThrottle:
