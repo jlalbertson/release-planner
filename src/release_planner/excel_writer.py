@@ -177,17 +177,6 @@ class ExcelWriter:
 
         logger.info("Wrote %d rows to '%s' worksheet", len(self._big_rocks), ws.title)
 
-    @staticmethod
-    def _build_comments(candidate: Candidate) -> str:
-        """Build comments string with source_pass tag appended."""
-        comments = candidate.comments
-        if candidate.source_pass and candidate.source_pass not in (comments or ""):
-            if comments:
-                comments = f"{comments} [source: {candidate.source_pass}]"
-            else:
-                comments = f"[source: {candidate.source_pass}]"
-        return comments
-
     def _feature_row(self, candidate: Candidate) -> list:
         """Convert a Candidate to a row matching FEATURE_COLUMNS order."""
         return [

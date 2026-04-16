@@ -40,7 +40,7 @@ def run_pipeline(
     rock_filter: list[str] | None = None,
     passes: list[int] | None = None,
     dry_run: bool = False,
-    duplicate_mode: str = "first",
+    duplicate_mode: str = "all",
     exclude_fix_version_patterns: list[str] | None = None,
 ) -> dict:
     """Execute the full pipeline with three-pass discovery.
@@ -48,7 +48,6 @@ def run_pipeline(
     Returns summary dict with candidate counts and output path/URL.
     """
     from release_planner.jira_client import JiraClient
-    from release_planner.overrides import OverrideLoader
 
     if passes is None:
         passes = [1, 2, 3]
@@ -152,10 +151,6 @@ def run_pipeline(
             stats["rfe"],
         )
 
-    # Handle cross-rock deduplication for duplicate_mode="first"
-    if duplicate_mode == "first":
-        _deduplicate_candidates(all_candidates, active_rocks)
-
     # Apply overrides
     if overrides and overrides.overrides:
         from release_planner.overrides import OverrideLoader
@@ -258,62 +253,6 @@ def run_pipeline(
     return result
 
 
-def _deduplicate_candidates(
-    all_candidates: dict[str, list[Candidate]],
-    rocks: list[BigRock],
-) -> None:
-    """Handle cross-rock deduplication.
-
-    For issues appearing under multiple rocks:
-    - The issue row appears under the highest-priority rock only.
-    - The big_rock field is set to comma-joined rock names.
-    - A note is added to comments about other rocks.
-    """
-    # Build mapping of issue_key -> list of rock names
-    key_to_rocks: dict[str, list[str]] = {}
-    for rock in rocks:
-        for candidate in all_candidates.get(rock.name, []):
-            key_to_rocks.setdefault(candidate.issue_key, []).append(rock.name)
-
-    # Find duplicates
-    duplicates = {k: v for k, v in key_to_rocks.items() if len(v) > 1}
-
-    if not duplicates:
-        return
-
-    logger.info("Found %d cross-rock duplicates", len(duplicates))
-
-    # Process duplicates: keep under highest-priority rock, remove from others
-    rock_priority = {r.name: r.priority for r in rocks}
-
-    for issue_key, rock_names in duplicates.items():
-        # Sort by priority (lowest number = highest priority)
-        sorted_rocks = sorted(rock_names, key=lambda r: rock_priority.get(r, 999))
-        primary_rock = sorted_rocks[0]
-        other_rocks = sorted_rocks[1:]
-
-        # Update the primary rock's candidate with multi-rock info
-        for i, candidate in enumerate(all_candidates.get(primary_rock, [])):
-            if candidate.issue_key == issue_key:
-                combined_name = ", ".join(sorted_rocks)
-                comments = candidate.comments
-                note = f"Also in: {', '.join(other_rocks)}"
-                if comments:
-                    comments = f"{comments} | {note}"
-                else:
-                    comments = note
-                all_candidates[primary_rock][i] = candidate.model_copy(
-                    update={"big_rock": combined_name, "comments": comments}
-                )
-                break
-
-        # Remove from other rocks
-        for other_rock in other_rocks:
-            all_candidates[other_rock] = [
-                c for c in all_candidates.get(other_rock, []) if c.issue_key != issue_key
-            ]
-
-
 @click.group()
 def main():
     """RHOAI Release Planner -- generate planning spreadsheets from Jira to Google Sheets."""
@@ -403,7 +342,7 @@ def generate(
     # Load config
     try:
         big_rocks_list, br_config = load_big_rocks(effective_config_dir)
-    except (FileNotFoundError, Exception) as e:
+    except Exception as e:
         raise click.ClickException(f"Failed to load config: {e}") from e
 
     release = br_config.release

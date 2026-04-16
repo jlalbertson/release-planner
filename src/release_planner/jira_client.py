@@ -48,6 +48,7 @@ class JiraClient:
         self._query_delay = query_delay
         self._last_query_time: float = 0.0
         self._jira: JIRA | None = None
+        self._is_cloud: bool = "atlassian.net" in server
 
     def connect(self) -> None:
         """Establish connection to Jira. Raises RuntimeError on auth failure."""
@@ -106,7 +107,7 @@ class JiraClient:
 
         logger.debug("Executing JQL: %s (max_results=%d)", jql, max_results)
 
-        if jira._is_cloud:
+        if self._is_cloud:
             return self._search_issues_cloud(jira, jql, max_results)
         return self._search_issues_server(jira, jql, max_results)
 
@@ -471,10 +472,10 @@ class JiraClient:
         """Append a status filter to exclude closed issues from a JQL query."""
         closed_list = ", ".join(f'"{s}"' for s in JiraClient._CLOSED_STATUSES)
         clause = f"status NOT IN ({closed_list})"
-        # Insert before ORDER BY if present
-        upper = jql.upper()
-        if "ORDER BY" in upper:
-            idx = upper.index("ORDER BY")
+        # Insert before ORDER BY if present (case-insensitive, word-boundary safe)
+        match = re.search(r"\bORDER\s+BY\b", jql, re.IGNORECASE)
+        if match:
+            idx = match.start()
             return f"{jql[:idx].rstrip()} AND {clause} {jql[idx:]}"
         return f"{jql} AND {clause}"
 

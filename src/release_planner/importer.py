@@ -74,14 +74,6 @@ class SpreadsheetImporter:
             ImportError: If openpyxl is not installed.
             FileNotFoundError: If the .xlsx file does not exist.
         """
-        try:
-            import openpyxl  # noqa: F401
-        except ImportError:
-            raise ImportError(
-                "openpyxl is required for the import-xlsx command. "
-                "Install it with: pip install release-planner[import]"
-            ) from None
-
         path = Path(xlsx_path)
         if not path.exists():
             raise FileNotFoundError(f"Spreadsheet not found: {xlsx_path}")

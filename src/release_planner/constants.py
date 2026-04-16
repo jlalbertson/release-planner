@@ -187,7 +187,6 @@ VALIDATION_PRIORITY: list[str] = [
     "Minor",
     "Undefined",
 ]
-VALIDATION_PHASE: list[str] = ["DP", "TP", "GA"]
 VALIDATION_RFE_STATUS: list[str] = [
     "New",
     "Stakeholder Review",
@@ -213,4 +212,3 @@ PRIORITY_CRITICAL_COLOR = {"red": 1.0, "green": 0.0, "blue": 0.0}  # red
 
 # Google Sheets API rate limits
 SHEETS_API_BATCH_SIZE = 1000  # max rows per update call
-SHEETS_API_QUOTA_DELAY = 1.0  # seconds between API calls if needed
