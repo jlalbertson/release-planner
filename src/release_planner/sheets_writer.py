@@ -490,32 +490,32 @@ class SheetsWriter:
         """Convert a Candidate to a row matching FEATURE_COLUMNS order."""
         s = self._sanitize_cell
         return [
-            candidate.big_rock,
+            s(candidate.big_rock),
             self._build_hyperlink_formula(candidate.issue_key),
-            candidate.status,
-            candidate.priority,
-            candidate.phase,
+            s(candidate.status),
+            s(candidate.priority),
+            s(candidate.phase),
             s(candidate.summary),
             s(candidate.components),
-            candidate.target_release,
+            s(candidate.target_release),
             s(candidate.pm),
             s(candidate.delivery_owner),
             self._build_hyperlink_formula(candidate.rfe) if candidate.rfe else "",
-            candidate.labels,
+            s(candidate.labels),
         ]
 
     def _rfe_to_row(self, candidate: Candidate) -> list[str | int | float | None]:
         """Convert a Candidate to a row matching RFE_COLUMNS order."""
         s = self._sanitize_cell
         return [
-            candidate.big_rock,
+            s(candidate.big_rock),
             self._build_hyperlink_formula(candidate.issue_key),
-            candidate.status,
-            candidate.priority,
+            s(candidate.status),
+            s(candidate.priority),
             s(candidate.summary),
             s(candidate.components),
             s(candidate.pm),
-            candidate.labels,
+            s(candidate.labels),
         ]
 
     @staticmethod

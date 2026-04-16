@@ -234,6 +234,83 @@ class TestSheetsWriter:
         assert len(writer._rfes["MaaS"]) == 1  # RHAIRFE-200
 
 
+class TestSanitization:
+    """Tests for formula injection prevention in SheetsWriter."""
+
+    def test_sanitize_cell_prefixes_equals(self):
+        assert SheetsWriter._sanitize_cell("=SUM(A1)") == "'=SUM(A1)"
+
+    def test_sanitize_cell_prefixes_plus(self):
+        assert SheetsWriter._sanitize_cell("+cmd") == "'+cmd"
+
+    def test_sanitize_cell_prefixes_minus(self):
+        assert SheetsWriter._sanitize_cell("-cmd") == "'-cmd"
+
+    def test_sanitize_cell_prefixes_at(self):
+        assert SheetsWriter._sanitize_cell("@SUM(A1)") == "'@SUM(A1)"
+
+    def test_sanitize_cell_passes_normal_text(self):
+        assert SheetsWriter._sanitize_cell("Normal text") == "Normal text"
+
+    def test_sanitize_cell_passes_empty_string(self):
+        assert SheetsWriter._sanitize_cell("") == ""
+
+    def test_feature_row_sanitizes_labels(self, writer_with_data):
+        """Labels field should be sanitized to prevent formula injection."""
+        writer, _, _, _, _, _ = writer_with_data
+        from release_planner.models import Candidate
+
+        candidate = Candidate(
+            big_rock="TestRock",
+            issue_key="RHOAIENG-99999",
+            summary="Normal summary",
+            labels="=IMPORTRANGE(evil)",
+        )
+        row = writer._feature_to_row(candidate)
+        # Labels is the last column (index 11)
+        assert row[11] == "'=IMPORTRANGE(evil)"
+
+    def test_rfe_row_sanitizes_labels(self, writer_with_data):
+        """Labels field should be sanitized in RFE rows too."""
+        writer, _, _, _, _, _ = writer_with_data
+        from release_planner.models import Candidate
+
+        candidate = Candidate(
+            big_rock="TestRock",
+            issue_key="RHAIRFE-99999",
+            summary="Normal summary",
+            labels="+cmd|'/C calc.exe",
+        )
+        row = writer._rfe_to_row(candidate)
+        # Labels is the last column (index 7)
+        assert row[7] == "'+cmd|'/C calc.exe"
+
+    def test_feature_row_sanitizes_all_text_fields(self, writer_with_data):
+        """All text fields should be sanitized."""
+        writer, _, _, _, _, _ = writer_with_data
+        from release_planner.models import Candidate
+
+        candidate = Candidate(
+            big_rock="=EVIL",
+            issue_key="RHOAIENG-99999",
+            status="=EVIL",
+            priority="=EVIL",
+            phase="=EVIL",
+            summary="=EVIL",
+            components="=EVIL",
+            target_release="=EVIL",
+            pm="=EVIL",
+            delivery_owner="=EVIL",
+            labels="=EVIL",
+        )
+        row = writer._feature_to_row(candidate)
+        # All text fields (except hyperlink formulas at index 1 and 10) should be prefixed
+        for i, val in enumerate(row):
+            if i in (1, 10):  # hyperlink formula columns
+                continue
+            assert val == "'=EVIL", f"Column {i} was not sanitized: {val}"
+
+
 class TestLoadCredentials:
     """Tests for SheetsWriter.load_credentials()."""
 
