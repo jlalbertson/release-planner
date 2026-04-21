@@ -1,0 +1,12 @@
+# k8s/configmap-data.yaml (optional)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: release-planner-data
+  namespace: rhoai-release-planner
+data:
+  field_mapping.yaml: |
+    target_release: customfield_12345
+    delivery_owner: customfield_67890
+  overrides.yaml: |
+    overrides: {}

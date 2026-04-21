@@ -1,0 +1,15 @@
+# k8s/configmap-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: release-planner-config
+  namespace: rhoai-release-planner
+data:
+  big_rocks.yaml: |
+    # Paste contents of config/big_rocks.yaml here.
+    # Update this ConfigMap when Big Rocks change or a new release starts.
+    releases:
+      "3.5":
+        outcome_keys:
+          - OUTCOME-123
+          - OUTCOME-456

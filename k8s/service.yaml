@@ -1,0 +1,16 @@
+# k8s/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: release-planner
+  namespace: rhoai-release-planner
+  labels:
+    app: release-planner
+spec:
+  selector:
+    app: release-planner
+  ports:
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+  type: ClusterIP

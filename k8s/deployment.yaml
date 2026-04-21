@@ -1,0 +1,84 @@
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: release-planner
+  namespace: rhoai-release-planner
+  labels:
+    app: release-planner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: release-planner
+  template:
+    metadata:
+      labels:
+        app: release-planner
+    spec:
+      containers:
+        - name: release-planner
+          image: ghcr.io/<org>/release-planner:latest
+          imagePullPolicy: Always
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - containerPort: 9000
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: release-planner-secrets
+          env:
+            # Jira Cloud basic auth username. The password (API token)
+            # is RELEASE_PLANNER_JIRA_TOKEN from the Secret.
+            - name: JIRA_EMAIL
+              value: "<your-jira-email>"
+            - name: LOG_LEVEL
+              value: "INFO"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30   # allows up to ~150s for slow startup
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9000
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          volumeMounts:
+            - name: config-vol
+              mountPath: /opt/app-root/config
+              readOnly: true
+            # Optional: mount runtime data from ConfigMap
+            # - name: data-vol
+            #   mountPath: /opt/app-root/data
+            #   readOnly: true
+      volumes:
+        - name: config-vol
+          configMap:
+            name: release-planner-config
+        # - name: data-vol
+        #   configMap:
+        #     name: release-planner-data
