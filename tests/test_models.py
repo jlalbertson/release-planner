@@ -13,26 +13,22 @@ class TestBigRock:
             priority=1,
             name="MaaS",
             full_name="MaaS (continue from 3.4)",
-            components=["Model as a Service", "MaaS"],
-            jql='project in (RHOAIENG) AND component = "MaaS" ORDER BY key ASC',
+            outcome_keys=["RHAISTRAT-9001"],
         )
         assert rock.priority == 1
         assert rock.name == "MaaS"
-        assert len(rock.components) == 2
+        assert rock.outcome_keys == ["RHAISTRAT-9001"]
 
     def test_big_rock_defaults(self):
         rock = BigRock(
             priority=5,
             name="Test",
             full_name="Test Rock",
-            components=["Comp"],
-            jql="project = TEST",
         )
-        assert rock.rfe_jql == ""
-        assert rock.exclude_keywords == []
+        assert rock.outcome_keys == []
+        assert rock.outcome_url == ""
         assert rock.state == ""
         assert rock.pillar == ""
-        assert rock.outcome == ""
         assert rock.owner == ""
         assert rock.notes == ""
         assert rock.description == ""
@@ -43,8 +39,6 @@ class TestBigRock:
                 priority=0,
                 name="Bad",
                 full_name="Bad Rock",
-                components=["Comp"],
-                jql="project = TEST",
             )
 
     def test_big_rock_priority_no_upper_bound(self):
@@ -53,21 +47,17 @@ class TestBigRock:
             priority=999,
             name="Future",
             full_name="Future Rock",
-            components=["Comp"],
-            jql="project = TEST",
         )
         assert rock.priority == 999
 
-    def test_big_rock_with_exclude_keywords(self):
+    def test_big_rock_with_outcome_keys(self):
         rock = BigRock(
             priority=6,
             name="Tool Calling",
             full_name="Tool Calling Support",
-            components=["vLLM Runtime"],
-            jql="project = TEST",
-            exclude_keywords=["multimodal", "multitenan"],
+            outcome_keys=["RHAISTRAT-9004", "RHAISTRAT-9003"],
         )
-        assert rock.exclude_keywords == ["multimodal", "multitenan"]
+        assert rock.outcome_keys == ["RHAISTRAT-9004", "RHAISTRAT-9003"]
 
 
 class TestCandidate:
@@ -90,12 +80,12 @@ class TestCandidate:
             architect="John Smith",
             ranking=1,
             rice_score=85.0,
-            source_pass="committed",
+            source_pass="outcome",
         )
         assert c.issue_key == "RHOAIENG-12345"
         assert c.ranking == 1
         assert c.rice_score == 85.0
-        assert c.source_pass == "committed"
+        assert c.source_pass == "outcome"
 
     def test_valid_candidate_minimal(self):
         c = Candidate(big_rock="MaaS", issue_key="RHOAIENG-1")
@@ -128,7 +118,7 @@ class TestCandidate:
         c = Candidate(
             big_rock="MaaS",
             issue_key="RHOAIENG-1",
-            source_pass="committed",
+            source_pass="outcome",
             source="jira",
             jira_id="100001",
         )

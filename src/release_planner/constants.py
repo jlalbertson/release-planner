@@ -9,15 +9,19 @@ class BigRockColumn(StrEnum):
     PILLAR = "Pillar"
     PRIORITY = "Priority"
     BIG_ROCK = "Big Rock"
+    OUTCOME = "Outcome"
+    OUTCOME_DESCRIPTION = "Outcome Description"
     STATE = "State"
     OWNER = "Owner"
+    FEATURES = "Features"
+    RFES = "RFEs"
     NOTES = "Notes"
 
 
 # Ordered list of big rock column headers (for worksheet generation)
 BIG_ROCK_COLUMNS: list[str] = [col.value for col in BigRockColumn]
 
-# Feature tab columns (Engineering Commitments) -- RHAISTRAT issues only
+# Feature tab columns (Proposed Features) -- RHAISTRAT issues only
 FEATURE_COLUMNS: list[str] = [
     "Big Rock",
     "Feature",
@@ -27,6 +31,7 @@ FEATURE_COLUMNS: list[str] = [
     "Title",
     "Component[s]",
     "Target Release",
+    "Fix Version (Committed)",
     "PM",
     "Delivery Owner",
     "RFE",
@@ -55,6 +60,7 @@ FEATURE_COLUMN_WIDTHS_CHARS: dict[str, float] = {
     "Title": 21.38,
     "Component[s]": 21.25,
     "Target Release": 15.38,
+    "Fix Version (Committed)": 20.0,
     "PM": 11.0,
     "Delivery Owner": 14.13,
     "RFE": 15.0,
@@ -83,6 +89,7 @@ FEATURE_COLUMN_WIDTHS: dict[str, int] = {
     "Title": 160,
     "Component[s]": 159,
     "Target Release": 115,
+    "Fix Version (Committed)": 150,
     "PM": 83,
     "Delivery Owner": 106,
     "RFE": 98,
@@ -106,19 +113,27 @@ BIG_ROCK_COLUMN_WIDTHS: dict[str, int] = {
     BigRockColumn.PILLAR: 146,
     BigRockColumn.PRIORITY: 86,
     BigRockColumn.BIG_ROCK: 152,
+    BigRockColumn.OUTCOME: 120,
+    BigRockColumn.OUTCOME_DESCRIPTION: 250,
     BigRockColumn.STATE: 70,
     BigRockColumn.OWNER: 133,
+    BigRockColumn.FEATURES: 75,
+    BigRockColumn.RFES: 60,
     BigRockColumn.NOTES: 346,
 }
 
 # Column widths in character units for the Big Rocks worksheet (used by ExcelWriter)
-# Values taken from the reference "Summit Big Rocks" sheet.
+# Values taken from the reference "Big Rocks" sheet.
 BIG_ROCK_COLUMN_WIDTHS_CHARS: dict[str, float] = {
     BigRockColumn.PILLAR: 19.5,
     BigRockColumn.PRIORITY: 11.5,
     BigRockColumn.BIG_ROCK: 20.25,
+    BigRockColumn.OUTCOME: 16.0,
+    BigRockColumn.OUTCOME_DESCRIPTION: 33.0,
     BigRockColumn.STATE: 9.38,
     BigRockColumn.OWNER: 17.75,
+    BigRockColumn.FEATURES: 10.0,
+    BigRockColumn.RFES: 8.0,
     BigRockColumn.NOTES: 46.13,
 }
 
@@ -163,3 +178,11 @@ PRIORITY_CRITICAL_COLOR = {"red": 1.0, "green": 0.0, "blue": 0.0}  # red
 
 # Google Sheets API rate limits
 SHEETS_API_BATCH_SIZE = 1000  # max rows per update call
+
+# Web server defaults
+DEFAULT_WEB_HOST = "127.0.0.1"
+DEFAULT_WEB_PORT = 9000
+
+# Cache TTLs (seconds)
+CACHE_TTL_CANDIDATES = 900  # 15 minutes
+CACHE_TTL_RELEASES = 3600  # 60 minutes

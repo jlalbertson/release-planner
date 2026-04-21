@@ -48,6 +48,8 @@ class ExcelWriter:
         candidates: dict[str, list[Candidate]],
         release: str,
         fix_versions: list[str] | None = None,
+        per_rock_stats: dict[str, dict[str, int]] | None = None,
+        outcome_summaries: dict[str, str] | None = None,
     ):
         """Initialize the Excel writer.
 
@@ -56,19 +58,23 @@ class ExcelWriter:
             candidates: Map of big_rock_name -> list of Candidate, in display order.
             release: Release version string (e.g. "3.5") for worksheet naming.
             fix_versions: Optional list of target release values for data validation.
+            per_rock_stats: Optional dict of rock_name -> {"features": N, "rfes": N}.
+            outcome_summaries: Optional dict of outcome_key -> summary (title).
         """
         self._big_rocks = big_rocks
         self._candidates = candidates
         self._release = release
         self._fix_versions = fix_versions or []
+        self._per_rock_stats = per_rock_stats or {}
+        self._outcome_summaries = outcome_summaries or {}
 
     def write(self, output_path: str | Path) -> str:
         """Write data to an Excel .xlsx file.
 
         Creates three worksheets:
-        - Engineering Commitments: RHAISTRAT features only
-        - RFEs: RHAIRFE issues only
-        - Summit Big Rocks: rock summary
+        - Proposed Features: RHAISTRAT features only
+        - Proposed RFEs: RHAIRFE issues only
+        - Big Rocks: rock summary
 
         Args:
             output_path: Path for the output .xlsx file.
@@ -90,15 +96,15 @@ class ExcelWriter:
 
         # Feature worksheet (rename the default sheet)
         ws_features = wb.active
-        ws_features.title = f"Engineering Commitments {self._release}"
+        ws_features.title = "Proposed Features"
         self._write_feature_worksheet(ws_features, features)
 
         # RFE worksheet
-        ws_rfes = wb.create_sheet(title=f"RFEs {self._release}")
+        ws_rfes = wb.create_sheet(title="Proposed RFEs")
         self._write_rfe_worksheet(ws_rfes, rfes)
 
         # Big Rocks worksheet
-        ws_big_rocks = wb.create_sheet(title="Summit Big Rocks")
+        ws_big_rocks = wb.create_sheet(title="Big Rocks")
         self._write_big_rocks_worksheet(ws_big_rocks)
 
         wb.save(str(output_path))
@@ -107,7 +113,7 @@ class ExcelWriter:
         return abs_path
 
     def _write_feature_worksheet(self, ws, features: dict[str, list[Candidate]]) -> None:
-        """Write the Engineering Commitments worksheet (RHAISTRAT features only)."""
+        """Write the Proposed Features worksheet (RHAISTRAT features only)."""
         columns = FEATURE_COLUMNS
         ws.append(list(columns))
 
@@ -158,13 +164,23 @@ class ExcelWriter:
 
         # Data rows
         for rock in self._big_rocks:
+            stats = self._per_rock_stats.get(rock.name, {})
+            outcome_keys_str = ", ".join(rock.outcome_keys) if rock.outcome_keys else ""
+            outcome_desc_parts = [
+                self._outcome_summaries.get(k, "") for k in rock.outcome_keys
+            ]
+            outcome_desc = "; ".join(d for d in outcome_desc_parts if d)
             ws.append(
                 [
                     rock.pillar,
                     rock.priority,
                     rock.name,
+                    outcome_keys_str,
+                    outcome_desc,
                     rock.state,
                     rock.owner,
+                    stats.get("features", 0),
+                    stats.get("rfes", 0),
                     "",  # Notes left blank for now
                 ]
             )
@@ -173,6 +189,7 @@ class ExcelWriter:
         self._format_header(ws, len(BIG_ROCK_COLUMNS))
         self._set_column_widths(ws, BIG_ROCK_COLUMNS, BIG_ROCK_COLUMN_WIDTHS_CHARS)
         self._merge_pillar_cells(ws, len(self._big_rocks))
+        self._apply_outcome_hyperlinks(ws, len(self._big_rocks))
         ws.freeze_panes = "A2"
 
         logger.info("Wrote %d rows to '%s' worksheet", len(self._big_rocks), ws.title)
@@ -188,6 +205,7 @@ class ExcelWriter:
             candidate.summary,
             candidate.components,
             candidate.target_release,
+            candidate.fix_version,
             candidate.pm,
             candidate.delivery_owner,
             candidate.rfe,
@@ -221,6 +239,34 @@ class ExcelWriter:
             if key and isinstance(key, str) and _ISSUE_KEY_RE.match(key):
                 cell.hyperlink = f"{JIRA_BROWSE_URL}/{key}"
                 cell.font = Font(color="0563C1", underline="single")
+
+    @staticmethod
+    def _apply_outcome_hyperlinks(ws, row_count: int) -> None:
+        """Add hyperlinks to Outcome keys in the Big Rocks worksheet.
+
+        Single keys get a direct hyperlink. Multiple comma-separated keys
+        link to a JQL search showing all of them.
+        """
+        outcome_col = BIG_ROCK_COLUMNS.index("Outcome") + 1
+        link_font = Font(color="0563C1", underline="single")
+        for row_idx in range(2, row_count + 2):
+            cell = ws.cell(row=row_idx, column=outcome_col)
+            value = cell.value
+            if not value or not isinstance(value, str):
+                continue
+            keys = [k.strip() for k in value.split(",") if k.strip()]
+            if not keys:
+                continue
+            if all(_ISSUE_KEY_RE.match(k) for k in keys):
+                if len(keys) == 1:
+                    cell.hyperlink = f"{JIRA_BROWSE_URL}/{keys[0]}"
+                else:
+                    jql_keys = "%2C+".join(keys)
+                    cell.hyperlink = (
+                        f"https://redhat.atlassian.net/issues/"
+                        f"?jql=key+in+({jql_keys})"
+                    )
+                cell.font = link_font
 
     @staticmethod
     def _format_header(ws, num_cols: int) -> None:

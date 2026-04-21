@@ -90,7 +90,7 @@ class TestSheetsWriter:
         rows = mock_ws.update.call_args[0][0]
 
         assert len(rows[0]) == len(FEATURE_COLUMNS)
-        assert len(rows[0]) == 12
+        assert len(rows[0]) == 13
 
     def test_feature_worksheet_header_order(self, writer_with_data):
         writer, _, mock_spreadsheet, mock_ws, _, _ = writer_with_data
@@ -153,7 +153,7 @@ class TestSheetsWriter:
         mock_ws.update.assert_called_once()
         rows = mock_ws.update.call_args[0][0]
         assert len(rows[0]) == len(BIG_ROCK_COLUMNS)
-        assert len(rows[0]) == 6
+        assert len(rows[0]) == 10
 
     def test_big_rocks_worksheet_header_order(self, writer_with_data):
         writer, _, mock_spreadsheet, _, _, mock_ws = writer_with_data
@@ -169,7 +169,10 @@ class TestSheetsWriter:
     def test_issue_key_hyperlink_formula(self, writer_with_data):
         writer, _, _, _, _, _ = writer_with_data
         formula = writer._build_hyperlink_formula("RHOAIENG-12345")
-        expected = '=HYPERLINK("https://redhat.atlassian.net/browse/RHOAIENG-12345", "RHOAIENG-12345")'
+        expected = (
+            '=HYPERLINK("https://redhat.atlassian.net/browse/'
+            'RHOAIENG-12345", "RHOAIENG-12345")'
+        )
         assert formula == expected
 
     def test_empty_hyperlink_formula(self, writer_with_data):
@@ -203,8 +206,7 @@ class TestSheetsWriter:
             priority=1,
             name="Empty",
             full_name="Empty Rock",
-            components=["Comp"],
-            jql="project = TEST",
+            outcome_keys=[],
         )
         mock_creds = MagicMock()
         with patch("release_planner.sheets_writer.gspread") as mock_gspread:
@@ -267,8 +269,8 @@ class TestSanitization:
             labels="=IMPORTRANGE(evil)",
         )
         row = writer._feature_to_row(candidate)
-        # Labels is the last column (index 11)
-        assert row[11] == "'=IMPORTRANGE(evil)"
+        # Labels is the last column (index 12)
+        assert row[12] == "'=IMPORTRANGE(evil)"
 
     def test_rfe_row_sanitizes_labels(self, writer_with_data):
         """Labels field should be sanitized in RFE rows too."""
@@ -299,14 +301,15 @@ class TestSanitization:
             summary="=EVIL",
             components="=EVIL",
             target_release="=EVIL",
+            fix_version="=EVIL",
             pm="=EVIL",
             delivery_owner="=EVIL",
             labels="=EVIL",
         )
         row = writer._feature_to_row(candidate)
-        # All text fields (except hyperlink formulas at index 1 and 10) should be prefixed
+        # All text fields (except hyperlink formulas at index 1 and 11) should be prefixed
         for i, val in enumerate(row):
-            if i in (1, 10):  # hyperlink formula columns
+            if i in (1, 11):  # hyperlink formula columns
                 continue
             assert val == "'=EVIL", f"Column {i} was not sanitized: {val}"
 

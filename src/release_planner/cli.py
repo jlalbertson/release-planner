@@ -8,6 +8,8 @@ import click
 
 from release_planner.config import Settings, load_big_rocks, load_field_mapping
 from release_planner.models import BigRock, Candidate, OverrideSet
+from release_planner.pipeline import PipelineError, PipelineResult
+from release_planner.pipeline import run_pipeline as _run_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,10 @@ def _setup_logging(verbose: bool = False, log_level: str | None = None) -> None:
     )
 
 
+# Terminal statuses not covered by JQL closed-status filter
+_TERMINAL_STATUSES = {"Review", "Pending Release"}
+
+
 def run_pipeline(
     settings: Settings,
     big_rocks: list[BigRock],
@@ -36,203 +42,108 @@ def run_pipeline(
     spreadsheet_name: str | None = None,
     share_with: list[str] | None = None,
     release: str = "3.5",
-    fix_versions: list[str] | None = None,
     rock_filter: list[str] | None = None,
-    passes: list[int] | None = None,
     dry_run: bool = False,
-    duplicate_mode: str = "all",
-    exclude_fix_version_patterns: list[str] | None = None,
 ) -> dict:
-    """Execute the full pipeline with three-pass discovery.
+    """Execute the outcome-driven pipeline (thin wrapper over pipeline.run_pipeline).
+
+    Delegates data pipeline to pipeline.run_pipeline(), then handles CLI-specific
+    output: click.echo() summary, Excel/Sheets writing.
 
     Returns summary dict with candidate counts and output path/URL.
     """
-    from release_planner.jira_client import JiraClient
-
-    if passes is None:
-        passes = [1, 2, 3]
-    if fix_versions is None:
-        fix_versions = []
-
-    # Filter rocks if requested
-    active_rocks = big_rocks
-    if rock_filter:
-        active_rocks = [
-            r for r in big_rocks if r.name in rock_filter or str(r.priority) in rock_filter
-        ]
-        if not active_rocks:
-            raise click.ClickException(
-                f"No matching rocks found for filter: {rock_filter}. "
-                f"Available: {', '.join(r.name for r in big_rocks)}"
-            )
-        logger.info(
-            "Filtered to %d rocks: %s",
-            len(active_rocks),
-            ", ".join(r.name for r in active_rocks),
-        )
-
-    # Initialize Jira client
-    jira_client = JiraClient(
-        server=settings.jira_server,
-        token=settings.jira_token,
-        email=settings.jira_email,
-        field_mapping=field_mapping,
-        query_delay=settings.query_delay,
-    )
-    jira_client.connect()
-
-    # Fetch candidates for each rock
-    all_candidates: dict[str, list[Candidate]] = {}
-    seen_keys: set[str] = set()
-    per_rock_stats: dict[str, dict[str, int]] = {}
-
-    for rock in active_rocks:
-        logger.info("Processing rock: %s (priority %d)", rock.name, rock.priority)
-        candidates = jira_client.fetch_candidates_for_rock(
-            rock=rock,
+    try:
+        result: PipelineResult = _run_pipeline(
+            settings=settings,
+            big_rocks=big_rocks,
+            field_mapping=field_mapping,
+            overrides=overrides,
             release=release,
-            fix_versions=fix_versions,
-            passes=passes,
-            seen_keys=seen_keys if duplicate_mode == "first" else None,
+            rock_filter=rock_filter,
         )
+    except PipelineError as e:
+        raise click.ClickException(str(e)) from e
 
-        # Filter out features (non-RHAIRFE) targeting excluded fix versions
-        if exclude_fix_version_patterns:
-            before_count = len(candidates)
-            candidates = [
-                c
-                for c in candidates
-                if c.issue_key.startswith("RHAIRFE-")
-                or not any(p in c.target_release for p in exclude_fix_version_patterns)
-            ]
-            filtered_count = before_count - len(candidates)
-            if filtered_count:
-                logger.info(
-                    "  Filtered %d features with excluded target versions (*%s*)",
-                    filtered_count,
-                    ", ".join(exclude_fix_version_patterns),
-                )
-
-        # Filter out features (non-RHAIRFE) in terminal states
-        _terminal_statuses = {"Closed", "Review", "Pending Release"}
-        before_count = len(candidates)
-        candidates = [
-            c
-            for c in candidates
-            if c.issue_key.startswith("RHAIRFE-") or c.status not in _terminal_statuses
-        ]
-        filtered_count = before_count - len(candidates)
-        if filtered_count:
-            logger.info(
-                "  Filtered %d features with terminal status (Closed/Review/Pending Release)",
-                filtered_count,
-            )
-
-        # Track stats
-        stats = {
-            "committed": sum(1 for c in candidates if c.source_pass == "committed"),
-            "candidate": sum(1 for c in candidates if c.source_pass == "candidate"),
-            "rfe": sum(1 for c in candidates if c.source_pass == "rfe"),
-            "manual": 0,
-        }
-        per_rock_stats[rock.name] = stats
-
-        # Update seen_keys for deduplication across rocks
-        for c in candidates:
-            seen_keys.add(c.issue_key)
-
-        all_candidates[rock.name] = candidates
-        logger.info(
-            "  %s: %d total (committed=%d, candidate=%d, rfe=%d)",
-            rock.name,
-            len(candidates),
-            stats["committed"],
-            stats["candidate"],
-            stats["rfe"],
-        )
-
-    # Apply overrides
-    if overrides and overrides.overrides:
-        from release_planner.overrides import OverrideLoader
-
-        loader = OverrideLoader.__new__(OverrideLoader)
-        loader._path = None  # type: ignore[assignment]
-        loader._override_set = overrides
-
-        for rock_name, candidates in all_candidates.items():
-            all_candidates[rock_name] = loader.apply(candidates)
-
-        # Add manual entries
-        manual_entries = loader.get_manual_entries()
-        for entry in manual_entries:
-            rock_name = entry.big_rock
-            if rock_name in all_candidates:
-                all_candidates[rock_name].append(entry)
-                per_rock_stats.setdefault(
-                    rock_name, {"committed": 0, "candidate": 0, "rfe": 0, "manual": 0}
-                )
-                per_rock_stats[rock_name]["manual"] += 1
-            else:
-                logger.warning(
-                    "Manual entry %s references unknown rock '%s'",
-                    entry.issue_key,
-                    rock_name,
-                )
+    # Unpack stats for display
+    rocks_with_outcomes = [r for r in result.big_rocks if r.outcome_keys]
+    rocks_without = result.rocks_without_outcomes
 
     # Calculate totals
-    total_candidates = sum(len(c) for c in all_candidates.values())
+    total_candidates = sum(len(c) for c in result.candidates.values())
 
     # Print summary
     click.echo(f"\n{'=' * 60}")
-    click.echo(f"Release Planner Summary ({release})")
+    click.echo(f"Release Planner Summary ({result.release})")
     click.echo(f"{'=' * 60}")
-    for rock in active_rocks:
-        stats = per_rock_stats.get(rock.name, {})
-        total = len(all_candidates.get(rock.name, []))
+    for rock in rocks_with_outcomes:
+        stats = result.per_rock_stats.get(rock.name, {})
         click.echo(
-            f"  {rock.name}: {total} total "
-            f"(committed={stats.get('committed', 0)}, "
-            f"candidate={stats.get('candidate', 0)}, "
-            f"rfe={stats.get('rfe', 0)}, "
-            f"manual={stats.get('manual', 0)})"
+            f"  {rock.name}: {stats.get('features', 0)} features, "
+            f"{stats.get('rfes', 0)} RFEs"
         )
-    click.echo(f"\nTotal candidates: {total_candidates}")
-    click.echo(f"Rocks processed: {len(active_rocks)}")
+    for rock in rocks_without:
+        click.echo(f"  {rock.name}: skipped (no outcome_keys)")
+    if result.skipped_count:
+        click.echo(
+            f"  Skipped: {result.skipped_count} children "
+            f"(no matching target release or label)"
+        )
+    if result.terminal_filtered_count:
+        click.echo(
+            f"  Filtered: {result.terminal_filtered_count} features "
+            f"(terminal status: Review/Pending Release)"
+        )
+    click.echo(
+        f"\nTotal features: "
+        f"{sum(s.get('features', 0) for s in result.per_rock_stats.values())}"
+    )
+    click.echo(
+        f"Total RFEs: {sum(s.get('rfes', 0) for s in result.per_rock_stats.values())}"
+    )
+    click.echo(
+        f"Rocks processed: {len(rocks_with_outcomes)} "
+        f"({len(rocks_without)} skipped)"
+    )
+    click.echo(f"{'=' * 60}")
 
-    result = {
+    summary = {
         "total_candidates": total_candidates,
-        "per_rock": per_rock_stats,
+        "per_rock": result.per_rock_stats,
         "output": "",
     }
 
     if dry_run:
         click.echo("\n[DRY RUN] Skipping output.")
-        return result
+        return summary
 
     # Excel output mode
     if output:
         from release_planner.excel_writer import ExcelWriter
 
         writer = ExcelWriter(
-            big_rocks=active_rocks,
-            candidates=all_candidates,
-            release=release,
-            fix_versions=fix_versions,
+            big_rocks=result.big_rocks,
+            candidates=result.candidates,
+            release=result.release,
+            fix_versions=result.fix_versions,
+            per_rock_stats=result.per_rock_stats,
+            outcome_summaries=result.outcome_summaries,
         )
         abs_path = writer.write(output)
-        result["output"] = abs_path
+        summary["output"] = abs_path
         click.echo(f"\nExcel file written: {abs_path}")
-        return result
+        return summary
 
     # Google Sheets output mode
     from release_planner.sheets_writer import SheetsWriter
 
     credentials = SheetsWriter.load_credentials()
     sheets_writer = SheetsWriter(
-        big_rocks=active_rocks,
-        candidates=all_candidates,
-        release=release,
+        big_rocks=result.big_rocks,
+        candidates=result.candidates,
+        release=result.release,
         credentials=credentials,
+        per_rock_stats=result.per_rock_stats,
+        outcome_summaries=result.outcome_summaries,
     )
 
     if create:
@@ -248,9 +159,9 @@ def run_pipeline(
             "or --create. See --help for details."
         )
 
-    result["output"] = url
+    summary["output"] = url
     click.echo(f"\nSpreadsheet URL: {url}")
-    return result
+    return summary
 
 
 @click.group()
@@ -295,17 +206,6 @@ def main():
     help="Generate only specific rocks (by name or number, repeatable)",
 )
 @click.option("--no-overrides", is_flag=True, help="Skip manual overrides")
-@click.option(
-    "--passes",
-    default="1,2,3",
-    help="Comma-separated list of discovery passes to run (default: 1,2,3)",
-)
-@click.option(
-    "--duplicate-mode",
-    default="all",
-    type=click.Choice(["first", "all"]),
-    help="'first' (show under highest-priority rock) or 'all' (show under every rock)",
-)
 @click.option("--verbose", "-v", is_flag=True, help="Debug logging")
 def generate(
     spreadsheet_id,
@@ -318,8 +218,6 @@ def generate(
     dry_run,
     rocks,
     no_overrides,
-    passes,
-    duplicate_mode,
     verbose,
 ):
     """Generate the release planning spreadsheet.
@@ -346,8 +244,6 @@ def generate(
         raise click.ClickException(f"Failed to load config: {e}") from e
 
     release = br_config.release
-    fix_versions = br_config.fix_versions
-    exclude_fix_version_patterns = br_config.exclude_fix_version_patterns
 
     # Load field mapping
     field_mapping = load_field_mapping(effective_data_dir)
@@ -363,14 +259,6 @@ def generate(
             overrides = loader.load()
         except RuntimeError as e:
             raise click.ClickException(f"Failed to load overrides: {e}") from e
-
-    # Parse passes
-    try:
-        pass_list = [int(p.strip()) for p in passes.split(",")]
-    except ValueError:
-        raise click.ClickException(
-            f"Invalid --passes value: '{passes}'. Use comma-separated integers (e.g. 1,2,3)"
-        )
 
     # Resolve spreadsheet_id from settings if not provided
     effective_spreadsheet_id = spreadsheet_id or settings.default_spreadsheet_id
@@ -395,18 +283,54 @@ def generate(
             spreadsheet_name=spreadsheet_name,
             share_with=list(share_with) if share_with else None,
             release=release,
-            fix_versions=fix_versions,
             rock_filter=list(rocks) if rocks else None,
-            passes=pass_list,
             dry_run=dry_run,
-            duplicate_mode=duplicate_mode,
-            exclude_fix_version_patterns=exclude_fix_version_patterns,
         )
     except click.ClickException:
         raise
     except Exception as e:
         logger.error("Pipeline failed: %s", e)
         raise click.ClickException(f"Pipeline error: {e}") from e
+
+
+@main.command()
+@click.option("--host", default=None, help="Bind address (default: 127.0.0.1)")
+@click.option("--port", default=None, type=int, help="Port (default: 9000)")
+@click.option("--verbose", "-v", is_flag=True, help="Debug logging")
+def serve(host, port, verbose):
+    """Start the web server.
+
+    Serves the release planner dashboard on the specified host and port.
+    Default: 127.0.0.1:9000
+    """
+    import os
+    from pathlib import Path
+
+    from release_planner.logging_config import configure_logging
+
+    from release_planner.constants import DEFAULT_WEB_HOST, DEFAULT_WEB_PORT
+
+    # Resolve host and port from CLI args -> env vars -> defaults
+    effective_host = host or os.environ.get("RELEASE_PLANNER_HOST", DEFAULT_WEB_HOST)
+    effective_port = port or int(os.environ.get("RELEASE_PLANNER_PORT", str(DEFAULT_WEB_PORT)))
+
+    # Determine log format
+    json_format = os.environ.get("RELEASE_PLANNER_LOG_FORMAT") == "json"
+    log_level = os.environ.get("LOG_LEVEL", "INFO")
+    configure_logging(json_format=json_format, level="DEBUG" if verbose else log_level)
+
+    # Resolve config_dir and data_dir to absolute paths (m5 fix)
+    config_dir = Path(os.environ.get("CONFIG_DIR", "./config")).resolve()
+    data_dir = Path(os.environ.get("DATA_DIR", "./data")).resolve()
+    os.environ["CONFIG_DIR"] = str(config_dir)
+    os.environ["DATA_DIR"] = str(data_dir)
+
+    import uvicorn
+
+    from release_planner.api import app  # noqa: F811
+
+    click.echo(f"Starting Release Planner web server on {effective_host}:{effective_port}")
+    uvicorn.run(app, host=effective_host, port=effective_port)
 
 
 @main.command("discover-fields")
@@ -453,6 +377,8 @@ def discover_fields(issue_key, verbose):
 @click.option("--verbose", "-v", is_flag=True, help="Debug logging")
 def validate_config(config_dir, data_dir, verbose):
     """Validate big_rocks.yaml and overrides.yaml without querying Jira."""
+    import re as _re
+
     _setup_logging(verbose=verbose)
 
     errors: list[str] = []
@@ -466,20 +392,23 @@ def validate_config(config_dir, data_dir, verbose):
         # Check for duplicate priorities
         priorities = [r.priority for r in big_rocks_list]
         if len(priorities) != len(set(priorities)):
-            warnings.append("Duplicate priorities found in big_rocks.yaml")
+            errors.append("Duplicate priorities found in big_rocks.yaml")
 
-        # Check for empty JQL
+        # Check outcome_keys format
+        outcome_pattern = _re.compile(r"^RHAISTRAT-\d+$")
         for rock in big_rocks_list:
-            if not rock.jql.strip():
-                errors.append(f"Rock '{rock.name}' has empty JQL")
-            if not rock.components:
-                warnings.append(f"Rock '{rock.name}' has no components")
-
-        # Check fix_versions
-        if not br_config.fix_versions:
-            warnings.append("No fix_versions defined")
-        else:
-            click.echo(f"fix_versions: {br_config.fix_versions}")
+            if not rock.outcome_keys:
+                warnings.append(
+                    f"Rock '{rock.name}' has no outcome_keys "
+                    f"(will be skipped during generation)"
+                )
+            else:
+                for key in rock.outcome_keys:
+                    if not outcome_pattern.match(key):
+                        errors.append(
+                            f"Rock '{rock.name}': outcome key '{key}' "
+                            f"does not match RHAISTRAT-\\d+ pattern"
+                        )
 
     except FileNotFoundError:
         errors.append(f"big_rocks.yaml not found in {config_dir}")

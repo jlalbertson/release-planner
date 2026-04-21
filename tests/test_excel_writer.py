@@ -22,8 +22,7 @@ def simple_big_rocks() -> list[BigRock]:
             full_name="MaaS (continue from 3.4)",
             pillar="Inference",
             state="continue from 3.4",
-            components=["Model as a Service"],
-            jql="project = RHAISTRAT",
+            outcome_keys=["RHAISTRAT-9001"],
         ),
         BigRock(
             priority=2,
@@ -31,8 +30,7 @@ def simple_big_rocks() -> list[BigRock]:
             full_name="Gen AI Studio",
             pillar="Agents",
             state="new for 3.5",
-            components=["AI Core Dashboard"],
-            jql="project = RHAISTRAT",
+            outcome_keys=["RHAISTRAT-9002"],
         ),
     ]
 
@@ -49,7 +47,7 @@ def simple_candidates() -> dict[str, list[Candidate]]:
                 priority="Major",
                 summary="Feature A",
                 labels="rhoai-3.5, 3.5-candidate",
-                source_pass="committed",
+                source_pass="outcome",
             ),
             Candidate(
                 big_rock="MaaS",
@@ -57,7 +55,7 @@ def simple_candidates() -> dict[str, list[Candidate]]:
                 status="Closed",
                 priority="Critical",
                 summary="Feature B",
-                source_pass="candidate",
+                source_pass="outcome",
             ),
             Candidate(
                 big_rock="MaaS",
@@ -65,7 +63,7 @@ def simple_candidates() -> dict[str, list[Candidate]]:
                 status="Approved",
                 priority="Major",
                 summary="RFE item A",
-                source_pass="candidate",
+                source_pass="outcome",
             ),
         ],
         "Gen AI Studio": [
@@ -75,7 +73,7 @@ def simple_candidates() -> dict[str, list[Candidate]]:
                 status="New",
                 priority="Blocker",
                 summary="Feature C",
-                source_pass="candidate",
+                source_pass="outcome",
             ),
             Candidate(
                 big_rock="Gen AI Studio",
@@ -83,7 +81,7 @@ def simple_candidates() -> dict[str, list[Candidate]]:
                 status="New",
                 priority="Normal",
                 summary="RFE item B",
-                source_pass="candidate",
+                source_pass="outcome",
             ),
         ],
     }
@@ -115,18 +113,18 @@ class TestExcelWriter:
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
         assert len(wb.sheetnames) == 3
-        assert "Engineering Commitments 3.5" in wb.sheetnames
-        assert "RFEs 3.5" in wb.sheetnames
-        assert "Summit Big Rocks" in wb.sheetnames
+        assert "Proposed Features" in wb.sheetnames
+        assert "Proposed RFEs" in wb.sheetnames
+        assert "Big Rocks" in wb.sheetnames
 
-    def test_candidates_worksheet_release_in_name(
+    def test_candidates_worksheet_names_are_static(
         self, tmp_path, simple_big_rocks, simple_candidates
     ):
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "4.0")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        assert "Engineering Commitments 4.0" in wb.sheetnames
-        assert "RFEs 4.0" in wb.sheetnames
+        assert "Proposed Features" in wb.sheetnames
+        assert "Proposed RFEs" in wb.sheetnames
 
 
 class TestFeatureWorksheet:
@@ -136,7 +134,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         header_row = [cell.value for cell in ws[1] if cell.value is not None]
         assert len(header_row) == len(FEATURE_COLUMNS)
 
@@ -144,7 +142,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(FEATURE_COLUMNS))]
         assert headers == FEATURE_COLUMNS
 
@@ -152,7 +150,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         # Should have 3 features (RHAISTRAT-100, 101, 200), no RHAIRFE
         data_rows = [row for row in ws.iter_rows(min_row=2, values_only=True) if row[0]]
         assert len(data_rows) == 3
@@ -164,7 +162,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         assert ws.cell(row=2, column=1).value == "MaaS"
         assert ws.cell(row=2, column=2).value == "RHAISTRAT-100"
 
@@ -172,7 +170,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         cell = ws.cell(row=2, column=2)  # Feature column
         assert cell.hyperlink is not None
         assert "RHAISTRAT-100" in cell.hyperlink.target
@@ -181,21 +179,21 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         assert ws.freeze_panes == "C2"
 
     def test_auto_filter(self, tmp_path, simple_big_rocks, simple_candidates):
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         assert ws.auto_filter.ref is not None
 
     def test_header_formatting(self, tmp_path, simple_big_rocks, simple_candidates):
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         header_cell = ws.cell(row=1, column=1)
         assert header_cell.font.bold is True
 
@@ -203,7 +201,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         status_col = FEATURE_COLUMNS.index("Issue status") + 1
         # Row 3 has status "Closed"
         cell = ws.cell(row=3, column=status_col)
@@ -213,7 +211,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         priority_col = FEATURE_COLUMNS.index("Priority") + 1
         # Row 3 has priority "Critical"
         cell = ws.cell(row=3, column=priority_col)
@@ -223,7 +221,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         comments_col = FEATURE_COLUMNS.index("Comments") + 1
         cell = ws.cell(row=2, column=comments_col)
         assert "rhoai-3.5" in str(cell.value)
@@ -233,7 +231,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(FEATURE_COLUMNS))]
         assert "DP/TP/GA" in headers
 
@@ -241,7 +239,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(FEATURE_COLUMNS))]
         assert "Team" not in headers
 
@@ -249,7 +247,7 @@ class TestFeatureWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(FEATURE_COLUMNS))]
         assert "RFE" in headers
         assert "RFE Status" not in headers
@@ -262,7 +260,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         header_row = [cell.value for cell in ws[1] if cell.value is not None]
         assert len(header_row) == len(RFE_COLUMNS)
 
@@ -270,7 +268,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(RFE_COLUMNS))]
         assert headers == RFE_COLUMNS
 
@@ -278,7 +276,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         # Should have 2 RFEs (RHAIRFE-50, RHAIRFE-60)
         data_rows = [row for row in ws.iter_rows(min_row=2, values_only=True) if row[0]]
         assert len(data_rows) == 2
@@ -290,7 +288,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         cell = ws.cell(row=2, column=2)  # RFE column
         assert cell.hyperlink is not None
         assert "RHAIRFE-50" in cell.hyperlink.target
@@ -299,7 +297,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(RFE_COLUMNS))]
         assert "Team" not in headers
 
@@ -307,7 +305,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(RFE_COLUMNS))]
         assert "Delivery Owner" not in headers
 
@@ -315,7 +313,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(RFE_COLUMNS))]
         assert "DP/TP/GA" not in headers
 
@@ -323,7 +321,7 @@ class TestRFEWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["RFEs 3.5"]
+        ws = wb["Proposed RFEs"]
         assert ws.cell(row=1, column=3).value == "RFE Status"
 
 
@@ -334,7 +332,7 @@ class TestBigRocksWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         header_row = [cell.value for cell in ws[1] if cell.value is not None]
         assert len(header_row) == len(BIG_ROCK_COLUMNS)
 
@@ -342,7 +340,7 @@ class TestBigRocksWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         headers = [ws.cell(row=1, column=i + 1).value for i in range(len(BIG_ROCK_COLUMNS))]
         assert headers == BIG_ROCK_COLUMNS
 
@@ -350,7 +348,7 @@ class TestBigRocksWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         data_rows = [row for row in ws.iter_rows(min_row=2) if row[0].value is not None]
         assert len(data_rows) == 2
 
@@ -358,7 +356,7 @@ class TestBigRocksWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         notes_col = BIG_ROCK_COLUMNS.index("Notes") + 1
         notes = ws.cell(row=2, column=notes_col).value
         assert notes is None or notes == ""
@@ -367,7 +365,7 @@ class TestBigRocksWorksheet:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         assert ws.freeze_panes == "A2"
 
 
@@ -378,14 +376,14 @@ class TestDataValidations:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         assert len(ws.data_validations.dataValidation) >= 3
 
     def test_big_rock_validation_values(self, tmp_path, simple_big_rocks, simple_candidates):
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         big_rock_dv = None
         for dv in ws.data_validations.dataValidation:
             if "A2:" in str(dv.sqref):
@@ -399,7 +397,7 @@ class TestDataValidations:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         status_col = FEATURE_COLUMNS.index("Issue status") + 1
         col_letter = chr(ord("A") + status_col - 1)
         status_dv = None
@@ -414,7 +412,7 @@ class TestDataValidations:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         priority_col = FEATURE_COLUMNS.index("Priority") + 1
         col_letter = chr(ord("A") + priority_col - 1)
         priority_dv = None
@@ -431,15 +429,14 @@ class TestDataValidations:
                 priority=1,
                 name="EmptyRock",
                 full_name="Empty Rock",
-                components=["Nothing"],
-                jql="project = NONE",
+                outcome_keys=[],
             ),
         ]
         candidates: dict[str, list[Candidate]] = {"EmptyRock": []}
         writer = ExcelWriter(rocks, candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         assert len(ws.data_validations.dataValidation) == 0
 
 
@@ -451,17 +448,17 @@ class TestPillarMerging:
         """Multiple rocks with shared pillars for merge testing."""
         return [
             BigRock(priority=1, name="MaaS", full_name="MaaS", pillar="Inference",
-                    components=["Comp"], jql="project = TEST"),
+                    outcome_keys=["RHAISTRAT-9001"]),
             BigRock(priority=2, name="Tool Calling", full_name="Tool Calling", pillar="Inference",
-                    components=["Comp"], jql="project = TEST"),
+                    outcome_keys=[]),
             BigRock(priority=3, name="vLLM", full_name="vLLM", pillar="Inference",
-                    components=["Comp"], jql="project = TEST"),
+                    outcome_keys=[]),
             BigRock(priority=4, name="Gen AI Studio", full_name="Gen AI Studio", pillar="Agents",
-                    components=["Comp"], jql="project = TEST"),
+                    outcome_keys=["RHAISTRAT-9002"]),
             BigRock(priority=5, name="BYO Agent", full_name="BYO Agent", pillar="Agents",
-                    components=["Comp"], jql="project = TEST"),
+                    outcome_keys=[]),
             BigRock(priority=6, name="AutoRAG", full_name="AutoRAG", pillar="Data",
-                    components=["Comp"], jql="project = TEST"),
+                    outcome_keys=["RHAISTRAT-9012"]),
         ]
 
     def test_pillar_cells_are_merged(self, tmp_path, multi_pillar_rocks):
@@ -469,7 +466,7 @@ class TestPillarMerging:
         writer = ExcelWriter(multi_pillar_rocks, candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         merged = [str(r) for r in ws.merged_cells.ranges]
         assert "A2:A4" in merged
         assert "A5:A6" in merged
@@ -479,7 +476,7 @@ class TestPillarMerging:
         writer = ExcelWriter(multi_pillar_rocks, candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         merged = [str(r) for r in ws.merged_cells.ranges]
         assert "A7:A7" not in merged
 
@@ -488,7 +485,7 @@ class TestPillarMerging:
         writer = ExcelWriter(multi_pillar_rocks, candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         cell = ws.cell(row=2, column=1)
         assert cell.alignment.vertical == "center"
 
@@ -496,7 +493,7 @@ class TestPillarMerging:
         writer = ExcelWriter(simple_big_rocks, simple_candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Summit Big Rocks"]
+        ws = wb["Big Rocks"]
         merged = [str(r) for r in ws.merged_cells.ranges]
         assert len(merged) == 0
 
@@ -510,14 +507,13 @@ class TestEmptyRock:
                 priority=1,
                 name="EmptyRock",
                 full_name="Empty Rock",
-                components=["Nothing"],
-                jql="project = NONE",
+                outcome_keys=[],
             ),
         ]
         candidates: dict[str, list[Candidate]] = {"EmptyRock": []}
         writer = ExcelWriter(rocks, candidates, "3.5")
         writer.write(tmp_path / "test.xlsx")
         wb = load_workbook(tmp_path / "test.xlsx")
-        ws = wb["Engineering Commitments 3.5"]
+        ws = wb["Proposed Features"]
         data_rows = [row for row in ws.iter_rows(min_row=2) if row[0].value is not None]
         assert len(data_rows) == 0

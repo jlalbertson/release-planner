@@ -1,4 +1,4 @@
-"""Jira integration: connection, three-pass query, field mapping, rate limiting."""
+"""Jira integration: outcome-driven traversal, field mapping, rate limiting."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from release_planner.constants import (
     JIRA_RETRY_COUNT,
     JIRA_SERVER_DEFAULT,
 )
-from release_planner.models import BigRock, Candidate
+from release_planner.models import Candidate
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +311,11 @@ class JiraClient:
         if not target_release and hasattr(fields, "fixVersions") and fields.fixVersions:
             target_release = fields.fixVersions[0].name
 
+        # Extract fix_version from fixVersions (independent of target_release)
+        fix_version = ""
+        if hasattr(fields, "fixVersions") and fields.fixVersions:
+            fix_version = ", ".join(fv.name for fv in fields.fixVersions)
+
         # Extract team from custom field (via field_mapping)
         team = ""
         if "team" in self._field_mapping:
@@ -356,8 +361,8 @@ class JiraClient:
         if not rfe_key and raw_issue.key.startswith("RHAISTRAT-"):
             rfe_key = self._get_parent_rfe_key(raw_issue)
 
-        # Determine source
-        source = "rfe" if source_pass == "rfe" else "jira"
+        # Determine source from issue key prefix (not source_pass)
+        source = "rfe" if raw_issue.key.startswith("RHAIRFE-") else "jira"
 
         return Candidate(
             big_rock=big_rock_name,
@@ -368,6 +373,7 @@ class JiraClient:
             components=components_str,
             labels=labels,
             target_release=target_release,
+            fix_version=fix_version,
             team=team,
             pm=pm,
             architect=architect,
@@ -467,163 +473,84 @@ class JiraClient:
     # Exclude closed/resolved statuses from all queries
     _CLOSED_STATUSES = ("Closed", "Done", "Resolved", "Cancelled")
 
-    @staticmethod
-    def _append_open_status_filter(jql: str) -> str:
-        """Append a status filter to exclude closed issues from a JQL query."""
-        closed_list = ", ".join(f'"{s}"' for s in JiraClient._CLOSED_STATUSES)
-        clause = f"status NOT IN ({closed_list})"
-        # Insert before ORDER BY if present (case-insensitive, word-boundary safe)
-        match = re.search(r"\bORDER\s+BY\b", jql, re.IGNORECASE)
-        if match:
-            idx = match.start()
-            return f"{jql[:idx].rstrip()} AND {clause} {jql[idx:]}"
-        return f"{jql} AND {clause}"
-
-    def fetch_issues_by_keys(
+    def fetch_outcome_children(
         self,
-        issue_keys: list[str],
+        outcome_key: str,
         big_rock_name: str,
-        seen_keys: set[str] | None = None,
     ) -> list[Candidate]:
-        """Fetch specific Jira issues by key and return mapped Candidates.
+        """Fetch all direct children of an Outcome issue.
 
-        Used when a BigRock has a curated issue_keys list from planning slides
-        instead of JQL-based discovery.
-
-        Post-processing:
-        - Filters out RHAIRFE issues in a closed state.
-        - For approved RHAIRFE issues with a Cloners link to a RHAISTRAT,
-          fetches and includes the linked RHAISTRAT as a feature candidate.
+        Uses JQL: parent = {outcome_key}
+                  AND status NOT IN ("Closed", "Done", "Resolved", "Cancelled")
+                  ORDER BY key ASC
 
         Args:
-            issue_keys: List of Jira issue keys to fetch.
-            big_rock_name: Name of the BigRock these candidates belong to.
-            seen_keys: Set of issue keys already discovered by higher-priority rocks.
+            outcome_key: Jira issue key of the Outcome (e.g. RHAISTRAT-9001).
+            big_rock_name: Name of the BigRock this Outcome belongs to.
 
         Returns:
-            List of Candidate models.
+            List of Candidate models (unfiltered -- caller applies release/label filters).
         """
-        if seen_keys is None:
-            seen_keys = set()
+        closed_list = ", ".join(f'"{s}"' for s in self._CLOSED_STATUSES)
+        jql = (
+            f'parent = "{outcome_key}" '
+            f"AND status NOT IN ({closed_list}) "
+            f"ORDER BY key ASC"
+        )
 
-        # Filter out already-seen keys
-        keys_to_fetch = [k for k in issue_keys if k not in seen_keys]
-        if not keys_to_fetch:
-            logger.info("  All %d issue keys already seen, skipping", len(issue_keys))
+        logger.info("  Querying children of Outcome %s for %s", outcome_key, big_rock_name)
+
+        try:
+            raw_issues = self.search_issues(jql)
+        except RuntimeError as e:
+            logger.error("  Failed to query children of %s: %s", outcome_key, e)
             return []
 
-        # Fetch raw issues in batches
-        raw_issues: list[Any] = []
-        batch_size = 50
-
-        for i in range(0, len(keys_to_fetch), batch_size):
-            batch = keys_to_fetch[i : i + batch_size]
-            quoted = ", ".join(f'"{k}"' for k in batch)
-            jql = f"key IN ({quoted})"
-
-            try:
-                raw_issues.extend(self.search_issues(jql))
-            except RuntimeError as e:
-                logger.warning("  Failed to fetch batch of %d keys: %s", len(batch), e)
-
-        # Process raw issues: filter closed RFEs, collect linked STRATs
-        candidates: list[Candidate] = []
-        linked_strat_keys: list[str] = []
-        fetched_keys: set[str] = set()
-
+        candidates = []
         for issue in raw_issues:
-            key = issue.key
-            status = ""
-            if hasattr(issue.fields, "status") and issue.fields.status:
-                status = issue.fields.status.name
-
-            # Skip closed RHAIRFE issues
-            if key.startswith("RHAIRFE-") and status in self._CLOSED_STATUSES:
-                logger.info("    Skipping closed RFE: %s (%s)", key, status)
-                continue
-
-            # For approved RHAIRFE issues, find linked RHAISTRAT via Cloners link
-            if key.startswith("RHAIRFE-"):
-                strat_key = self._get_cloned_strat_key(issue)
-                if strat_key and strat_key not in seen_keys:
-                    linked_strat_keys.append(strat_key)
-
-            candidate = self.map_to_candidate(issue, big_rock_name, "curated")
+            candidate = self.map_to_candidate(issue, big_rock_name, source_pass="outcome")
             candidates.append(candidate)
-            fetched_keys.add(key)
-
-        # Fetch linked RHAISTRAT issues for approved RFEs
-        strat_keys_to_fetch = [
-            k
-            for k in dict.fromkeys(linked_strat_keys)  # dedupe, preserve order
-            if k not in seen_keys and k not in fetched_keys
-        ]
-        if strat_keys_to_fetch:
-            logger.info(
-                "    Fetching %d linked STRATs for approved RFEs", len(strat_keys_to_fetch)
-            )
-            for i in range(0, len(strat_keys_to_fetch), batch_size):
-                batch = strat_keys_to_fetch[i : i + batch_size]
-                quoted = ", ".join(f'"{k}"' for k in batch)
-                jql = f"key IN ({quoted})"
-
-                try:
-                    strat_issues = self.search_issues(jql)
-                    for issue in strat_issues:
-                        candidate = self.map_to_candidate(issue, big_rock_name, "curated")
-                        candidates.append(candidate)
-                        fetched_keys.add(issue.key)
-                        logger.info(
-                            "    Added linked STRAT: %s (%s)",
-                            issue.key,
-                            candidate.summary[:60],
-                        )
-                except RuntimeError as e:
-                    logger.warning(
-                        "    Failed to fetch linked STRATs: %s", e
-                    )
 
         logger.info(
-            "  Fetched %d curated issues for %s (filtered %d closed, added %d linked STRATs)",
+            "  Outcome %s returned %d children for %s",
+            outcome_key,
             len(candidates),
             big_rock_name,
-            len(raw_issues) - len(candidates) + len(strat_keys_to_fetch),
-            len(strat_keys_to_fetch),
         )
         return candidates
 
-    @staticmethod
-    def _get_cloned_strat_key(issue: Any) -> str:
-        """Find a RHAISTRAT key linked via Cloners to an RHAIRFE issue.
+    def fetch_outcome_summaries(
+        self,
+        outcome_keys: list[str],
+    ) -> dict[str, str]:
+        """Fetch the summary (title) for a batch of Outcome issues.
 
         Args:
-            issue: Raw Jira issue object (RHAIRFE).
+            outcome_keys: List of Jira issue keys (e.g. ["RHAISTRAT-9001"]).
 
         Returns:
-            Linked RHAISTRAT key, or empty string if none found.
+            Dict mapping outcome_key -> summary string.
         """
-        if not hasattr(issue.fields, "issuelinks") or not issue.fields.issuelinks:
-            return ""
+        if not outcome_keys:
+            return {}
 
-        for link in issue.fields.issuelinks:
-            if not hasattr(link, "type"):
-                continue
-            # Match "Cloners" link type (covers "is cloned by" / "clones")
-            link_type_name = getattr(link.type, "name", "")
-            if "Clon" not in link_type_name:
-                continue
+        keys_str = ", ".join(outcome_keys)
+        jql = f"key in ({keys_str}) ORDER BY key ASC"
 
-            # Check both directions
-            linked_issue = None
-            if hasattr(link, "inwardIssue"):
-                linked_issue = link.inwardIssue
-            elif hasattr(link, "outwardIssue"):
-                linked_issue = link.outwardIssue
+        logger.info("Fetching summaries for %d Outcome issues", len(outcome_keys))
 
-            if linked_issue and linked_issue.key.startswith("RHAISTRAT-"):
-                return linked_issue.key
+        try:
+            raw_issues = self.search_issues(jql)
+        except RuntimeError as e:
+            logger.error("Failed to fetch Outcome summaries: %s", e)
+            return {}
 
-        return ""
+        summaries: dict[str, str] = {}
+        for issue in raw_issues:
+            summary = getattr(issue.fields, "summary", "") or ""
+            summaries[issue.key] = summary
+
+        return summaries
 
     @staticmethod
     def _get_parent_rfe_key(issue: Any) -> str:
@@ -666,158 +593,6 @@ class JiraClient:
             return match.group(1)
 
         return ""
-
-    def fetch_candidates_for_rock(
-        self,
-        rock: BigRock,
-        release: str,
-        fix_versions: list[str],
-        passes: list[int] | None = None,
-        seen_keys: set[str] | None = None,
-    ) -> list[Candidate]:
-        """Execute three-pass discovery for a rock and return mapped Candidates.
-
-        If the rock has a curated issue_keys list, fetches those directly instead
-        of running JQL discovery passes.
-
-        Args:
-            rock: BigRock definition with jql, rfe_jql, exclude_keywords.
-            release: Release version string (e.g. "3.5") for JQL substitution.
-            fix_versions: List of fixVersion variants for Pass 1.
-            passes: Which passes to run (default all three: [1, 2, 3]).
-            seen_keys: Set of issue keys already discovered by higher-priority rocks.
-                Keys found here will be excluded from results.
-
-        Returns:
-            List of Candidate models, each tagged with source_pass.
-        """
-        # Use curated issue_keys if available
-        if rock.issue_keys:
-            logger.info("  Using curated issue_keys (%d keys)", len(rock.issue_keys))
-            return self.fetch_issues_by_keys(rock.issue_keys, rock.name, seen_keys)
-
-        if passes is None:
-            passes = [1, 2, 3]
-        if seen_keys is None:
-            seen_keys = set()
-
-        candidates: list[Candidate] = []
-        rock_keys: set[str] = set()
-
-        # --- Pass 1: Committed issues (fixVersion-tagged) ---
-        if 1 in passes:
-            logger.info("  Pass 1 (committed): %s", rock.name)
-            quoted_versions = ", ".join(f'"{fv}"' for fv in fix_versions)
-            # Remove ORDER BY from base JQL to append fixVersion filter before it
-            base_jql = rock.jql
-            order_by = ""
-            if "ORDER BY" in base_jql.upper():
-                idx = base_jql.upper().index("ORDER BY")
-                order_by = base_jql[idx:]
-                base_jql = base_jql[:idx].rstrip()
-
-            pass1_jql = f"{base_jql} AND fixVersion IN ({quoted_versions}) {order_by}"
-            pass1_jql = self._append_open_status_filter(pass1_jql)
-
-            try:
-                issues = self.search_issues(pass1_jql)
-                for issue in issues:
-                    key = issue.key
-                    if key not in seen_keys and key not in rock_keys:
-                        candidate = self.map_to_candidate(issue, rock.name, "committed")
-                        candidates.append(candidate)
-                        rock_keys.add(key)
-                logger.info("    Pass 1 found %d committed issues", len(rock_keys))
-            except RuntimeError as e:
-                logger.warning("    Pass 1 failed for %s: %s", rock.name, e)
-
-        # --- Pass 2: Candidate issues (component-based, no fixVersion) ---
-        if 2 in passes:
-            logger.info("  Pass 2 (candidates): %s", rock.name)
-            pass2_count = 0
-            pre_pass2_count = len(candidates)
-            try:
-                pass2_jql = self._append_open_status_filter(rock.jql)
-                issues = self.search_issues(pass2_jql)
-                for issue in issues:
-                    key = issue.key
-                    if key not in seen_keys and key not in rock_keys:
-                        candidate = self.map_to_candidate(issue, rock.name, "candidate")
-                        candidates.append(candidate)
-                        rock_keys.add(key)
-                        pass2_count += 1
-                # Apply exclude_keywords filter to Pass 2 candidates only
-                if rock.exclude_keywords:
-                    prior = candidates[:pre_pass2_count]
-                    pass2_only = candidates[pre_pass2_count:]
-                    before = len(pass2_only)
-                    pass2_only = self._apply_exclude_keywords(
-                        pass2_only, rock.exclude_keywords
-                    )
-                    filtered = before - len(pass2_only)
-                    if filtered > 0:
-                        logger.info("    Filtered %d issues by exclude_keywords", filtered)
-                    candidates = prior + pass2_only
-                    rock_keys = {c.issue_key for c in candidates}
-                logger.info("    Pass 2 found %d candidate issues", pass2_count)
-            except RuntimeError as e:
-                logger.warning("    Pass 2 failed for %s: %s", rock.name, e)
-
-        # --- Pass 3: RFE issues (from RHAIRFE project) ---
-        if 3 in passes and rock.rfe_jql:
-            logger.info("  Pass 3 (RFE): %s", rock.name)
-            pass3_count = 0
-            try:
-                pass3_jql = self._append_open_status_filter(rock.rfe_jql)
-                issues = self.search_issues(pass3_jql)
-                for issue in issues:
-                    key = issue.key
-                    if key not in seen_keys and key not in rock_keys:
-                        candidate = self.map_to_candidate(issue, rock.name, "rfe")
-                        candidates.append(candidate)
-                        rock_keys.add(key)
-                        pass3_count += 1
-                logger.info("    Pass 3 found %d RFE issues", pass3_count)
-            except RuntimeError as e:
-                logger.warning("    Pass 3 failed for %s: %s", rock.name, e)
-
-        return candidates
-
-    def _apply_exclude_keywords(
-        self,
-        candidates: list[Candidate],
-        exclude_keywords: list[str],
-    ) -> list[Candidate]:
-        """Filter out candidates whose summary matches any exclude keyword.
-
-        Args:
-            candidates: List of candidates to filter.
-            exclude_keywords: Keywords to match against (case-insensitive substring match).
-
-        Returns:
-            Filtered list of candidates.
-        """
-        if not exclude_keywords:
-            return candidates
-
-        filtered: list[Candidate] = []
-        for candidate in candidates:
-            summary_lower = candidate.summary.lower()
-            excluded = False
-            for keyword in exclude_keywords:
-                if keyword.lower() in summary_lower:
-                    logger.debug(
-                        "Excluding %s (matched keyword '%s' in summary: %s)",
-                        candidate.issue_key,
-                        keyword,
-                        candidate.summary[:80],
-                    )
-                    excluded = True
-                    break
-            if not excluded:
-                filtered.append(candidate)
-
-        return filtered
 
     def _throttle(self) -> None:
         """Sleep for query_delay seconds between API calls.

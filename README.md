@@ -1,11 +1,12 @@
 # Release Planner
 
-RHOAI release planning spreadsheet generator. Queries `issues.redhat.com` (Jira Server/DC) to discover candidate issues for each Big Rock, and writes the results to a Google Spreadsheet with two worksheets: **"{release} Candidates"** and **"Big Rocks"**.
+RHOAI release planning spreadsheet generator. Uses **outcome-driven traversal** to discover candidate issues for each Big Rock from Jira, and writes the results to a Google Spreadsheet with two worksheets: **"{release} Candidates"** and **"Big Rocks"**.
 
 ## Features
 
-- **Three-pass discovery strategy:** fixVersion-tagged (committed), component-based (candidates), RFE-based
-- **15 Big Rocks** with configurable JQL queries and component mappings
+- **Outcome-driven discovery:** Each Big Rock declares Jira Outcome keys; the planner queries `parent = <outcome_key>` to discover all direct children, then filters Features by Target Release and RFEs by candidate label
+- **17 Big Rocks** with outcome-based configuration (12 active, 5 awaiting outcome key assignment)
+- **Merge deduplication:** Features appearing under multiple Big Rocks get a single row with combined names sorted by priority
 - **Google Sheets output** via service account authentication
 - **Manual overrides** via YAML for fields not available in Jira
 - **Spreadsheet import** (`import-xlsx`) to bootstrap overrides from existing `.xlsx` files
@@ -85,8 +86,6 @@ Options:
 - `--share-with TEXT` -- Email to share with (repeatable)
 - `--dry-run` -- Query Jira only, skip output
 - `--rocks TEXT` -- Filter to specific rocks (repeatable)
-- `--passes TEXT` -- Comma-separated passes: 1,2,3 (default: all)
-- `--duplicate-mode [first|all]` -- Cross-rock dedup mode (default: first)
 - `--no-overrides` -- Skip manual overrides
 - `-v, --verbose` -- Debug logging
 
@@ -114,15 +113,19 @@ Import an existing `.xlsx` spreadsheet to bootstrap `overrides.yaml`.
 python -m release_planner import-xlsx --xlsx path/to/file.xlsx [-o output.yaml]
 ```
 
-## Three-Pass Discovery Strategy
+## Outcome-Driven Discovery
 
-| Pass | JQL Filter | Tag | Purpose |
-|------|-----------|-----|---------|
-| 1 | fixVersion + component | `committed` | Issues already tagged for the release |
-| 2 | Component-only | `candidate` | Untagged issues in matching components |
-| 3 | RHAIRFE project | `rfe` | RFE-only entries with no RHAISTRAT/RHOAIENG key |
+Each Big Rock in `big_rocks.yaml` declares one or more Jira Outcome keys (e.g., `RHAISTRAT-9001`). The planner:
 
-Pass 2 intentionally produces a superset. The `source_pass` tag lets users see which issues are committed vs. candidates vs. RFE-only.
+1. Queries `parent = <outcome_key>` for each Outcome to discover all direct children
+2. Classifies children:
+   - **Features** (`RHAISTRAT-*`): included if Target Release contains the release string (e.g., "3.5")
+   - **RFEs** (`RHAIRFE-*`): included if labels contain the exact `3.5-candidate` label
+   - Other prefixes are skipped
+3. Post-filters terminal statuses ("Review", "Pending Release")
+4. Deduplicates: features appearing under multiple Big Rocks get a single row with merged names sorted by priority
+
+All children are tagged with `source_pass = "outcome"`. The `source` field is derived from the issue key prefix (`RHAIRFE-*` = "rfe", all others = "jira").
 
 ## Development
 
@@ -149,13 +152,13 @@ release-planner/
     cli.py              # Click CLI commands
     config.py           # Settings loader, YAML config parser
     models.py           # Pydantic v2 models
-    jira_client.py      # Jira connection and three-pass discovery
+    jira_client.py      # Jira connection and outcome-driven traversal
     sheets_writer.py    # Google Sheets writer via gspread
     overrides.py        # YAML override loader and merger
     importer.py         # .xlsx import for bootstrapping overrides
     constants.py        # Column enums, style constants
   config/
-    big_rocks.yaml      # 15 Big Rock definitions with JQL
+    big_rocks.yaml      # 17 Big Rock definitions with outcome_keys
   data/
     overrides.yaml      # Manual overrides (gitignored)
   tests/

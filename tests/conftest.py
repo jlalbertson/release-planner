@@ -33,44 +33,22 @@ def sample_big_rock() -> BigRock:
         full_name="MaaS (continue from 3.4)",
         pillar="Inference",
         state="continue from 3.4",
-        components=["Model as a Service", "MaaS", "AI Core Dashboard"],
-        jql=(
-            "project in (RHAISTRAT, RHAIRFE, AIPCC, KONFLUX, RHOAIENG, PSX) "
-            'AND component in ("Model as a Service", "MaaS", "AI Core Dashboard") '
-            "ORDER BY priority ASC, key ASC"
-        ),
-        rfe_jql=(
-            "project = RHAIRFE "
-            'AND component in ("Model as a Service", "MaaS", "AI Core Dashboard") '
-            "ORDER BY priority ASC, key ASC"
-        ),
-        exclude_keywords=[],
+        outcome_keys=["RHAISTRAT-9001"],
+        outcome_url="https://redhat.atlassian.net/browse/RHAISTRAT-9001",
     )
 
 
 @pytest.fixture
 def sample_big_rock_with_exclusions() -> BigRock:
-    """A BigRock with exclude_keywords for testing negative filtering."""
+    """A BigRock with empty outcome_keys for testing skip behavior."""
     return BigRock(
         priority=6,
-        name="Tool Calling Support",
-        full_name="Tool Calling Support (new for 3.5)",
+        name="Tool Calling",
+        full_name="Tool Calling",
         pillar="Inference",
         state="new for 3.5",
-        components=["AI Core Platform", "AI Platform DevOps", "llm-d", "vLLM Runtime"],
-        jql=(
-            "project in (RHAISTRAT, RHAIRFE, AIPCC, KONFLUX, RHOAIENG, PSX) "
-            'AND component in ("AI Core Platform", "AI Platform DevOps", "llm-d", "vLLM Runtime") '
-            'AND (summary ~ "tool call*" OR labels = "tool-calling") '
-            "ORDER BY priority ASC, key ASC"
-        ),
-        rfe_jql=(
-            "project = RHAIRFE "
-            'AND component in ("AI Core Platform", "AI Platform DevOps", "llm-d", "vLLM Runtime") '
-            'AND (summary ~ "tool call*" OR labels = "tool-calling") '
-            "ORDER BY priority ASC, key ASC"
-        ),
-        exclude_keywords=["multimodal", "multitenan"],
+        outcome_keys=[],
+        notes="Awaiting Outcome key assignment",
     )
 
 
@@ -88,7 +66,7 @@ def sample_candidates() -> list[Candidate]:
             target_release="RHOAI 3.5",
             rfe="RHAIRFE-100",
             rfe_status="Approved",
-            source_pass="committed",
+            source_pass="outcome",
         ),
         Candidate(
             big_rock="MaaS",
@@ -97,7 +75,7 @@ def sample_candidates() -> list[Candidate]:
             priority="Critical",
             summary="Dashboard latency improvements",
             components="AI Core Dashboard",
-            source_pass="candidate",
+            source_pass="outcome",
         ),
         Candidate(
             big_rock="MaaS",
@@ -107,7 +85,7 @@ def sample_candidates() -> list[Candidate]:
             summary="RFE: Support multi-model deployments",
             components="MaaS",
             source="rfe",
-            source_pass="rfe",
+            source_pass="outcome",
         ),
     ]
 
@@ -226,26 +204,26 @@ def mock_gspread_client():
     # Mock worksheets
     mock_features_ws = MagicMock()
     mock_features_ws.id = 0
-    mock_features_ws.title = "Engineering Commitments 3.5"
+    mock_features_ws.title = "Proposed Features"
 
     mock_rfes_ws = MagicMock()
     mock_rfes_ws.id = 1
-    mock_rfes_ws.title = "RFEs 3.5"
+    mock_rfes_ws.title = "Proposed RFEs"
 
     mock_big_rocks_ws = MagicMock()
     mock_big_rocks_ws.id = 2
-    mock_big_rocks_ws.title = "Summit Big Rocks"
+    mock_big_rocks_ws.title = "Big Rocks"
 
     mock_spreadsheet.worksheets.return_value = [
         mock_features_ws, mock_rfes_ws, mock_big_rocks_ws
     ]
 
     def worksheet_side_effect(name):
-        if "Engineering Commitments" in name:
+        if name == "Proposed Features":
             return mock_features_ws
-        elif "RFEs" in name:
+        elif name == "Proposed RFEs":
             return mock_rfes_ws
-        elif name == "Summit Big Rocks":
+        elif name == "Big Rocks":
             return mock_big_rocks_ws
         raise Exception(f"Unexpected worksheet name: {name}")
 

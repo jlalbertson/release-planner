@@ -13,36 +13,23 @@ logger = logging.getLogger(__name__)
 class BigRock(BaseModel):
     """A strategic initiative for a release."""
 
-    priority: int = Field(ge=1, description="Priority rank (no upper bound)")
-    name: str = Field(
-        description=(
-            "Display name for column A, e.g. 'MaaS'. Must match spreadsheet convention exactly."
-        )
+    priority: int = Field(ge=1, description="Priority rank (lower = higher priority)")
+    name: str = Field(description="Short display name, e.g. 'MaaS'")
+    full_name: str = Field(description="Full name with context")
+    outcome_keys: list[str] = Field(
+        default_factory=list,
+        description="Jira Outcome issue keys (e.g. RHAISTRAT-9001). "
+        "Children are discovered via parent = <key>. "
+        "Empty list = rock is skipped with a WARNING.",
     )
-    full_name: str = Field(description="Full name with context, e.g. 'MaaS (continue from 3.4)'")
-    components: list[str] = Field(description="Jira component names associated with this rock")
-    jql: str = Field(
-        description=("JQL query template for component-based discovery. Use {release} placeholder.")
-    )
-    rfe_jql: str = Field(
+    outcome_url: str = Field(
         default="",
-        description=(
-            "JQL for RFE-based discovery from RHAIRFE project. Use {release} placeholder."
-        ),
-    )
-    issue_keys: list[str] = Field(
-        default_factory=list,
-        description="Curated list of Jira issue keys for this rock (skips JQL discovery when set)",
-    )
-    exclude_keywords: list[str] = Field(
-        default_factory=list,
-        description="Keywords to exclude from results to disambiguate shared components",
+        description="Link to the Outcome issue in Jira (for reference/notes)",
     )
     state: str = Field(default="", description="E.g. 'continue from 3.4' or 'new for 3.5'")
     pillar: str = Field(
         default="", description="Organizational pillar: Inference, Agents, Data, Platform"
     )
-    outcome: str = Field(default="", description="Target outcome description")
     owner: str = Field(default="", description="Big Rock owner")
     notes: str = Field(default="", description="Freeform notes")
     description: str = Field(default="", description="Detailed description")
@@ -62,6 +49,7 @@ class Candidate(BaseModel):
     components: str = Field(default="", description="Comma-joined component names")
     labels: str = Field(default="", description="Comma-joined Jira labels")
     target_release: str = Field(default="", description="Target release / fixVersion")
+    fix_version: str = Field(default="", description="Fix Version (committed) from Jira")
     rfe: str = Field(default="", description="Linked RFE issue key")
     rfe_status: str = Field(default="", description="Status of linked RFE")
     pm: str = Field(default="", description="Product Manager")

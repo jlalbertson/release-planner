@@ -1,4 +1,4 @@
-"""Tests for jira_client.py: three-pass discovery, field mapping, error handling."""
+"""Tests for jira_client.py: outcome-driven traversal, field mapping, error handling."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from release_planner.jira_client import JiraClient
-from release_planner.models import BigRock, Candidate
 
 
 @pytest.fixture
@@ -94,11 +93,68 @@ class TestMapToCandidate:
 
     def test_map_rfe_issue(self, jira_client, mock_jira_issues):
         issue = mock_jira_issues[3]  # RHAIRFE-200
-        candidate = jira_client.map_to_candidate(issue, "MaaS", "rfe")
+        candidate = jira_client.map_to_candidate(issue, "MaaS", "outcome")
 
         assert candidate.issue_key == "RHAIRFE-200"
-        assert candidate.source == "rfe"
-        assert candidate.source_pass == "rfe"
+        assert candidate.source == "rfe"  # derived from key prefix, not source_pass
+        assert candidate.source_pass == "outcome"
+
+    def test_map_source_derived_from_key_prefix(self, jira_client, mock_jira_issues):
+        """source is derived from key prefix, not from source_pass arg (M5)."""
+        # RHOAIENG-12345 is not RHAIRFE -> source should be "jira"
+        issue = mock_jira_issues[0]
+        candidate = jira_client.map_to_candidate(issue, "MaaS", "outcome")
+        assert candidate.source == "jira"
+
+        # RHAIRFE-200 -> source should be "rfe" regardless of source_pass
+        rfe_issue = mock_jira_issues[3]
+        candidate2 = jira_client.map_to_candidate(rfe_issue, "MaaS", "outcome")
+        assert candidate2.source == "rfe"
+
+
+class TestFetchOutcomeChildren:
+    """Tests for JiraClient.fetch_outcome_children()."""
+
+    def test_returns_all_children(self, jira_client, mock_jira_issues):
+        jira_client._jira.search_issues.return_value = mock_jira_issues[:3]
+        children = jira_client.fetch_outcome_children("RHAISTRAT-9001", "MaaS")
+        assert len(children) == 3
+
+    def test_empty_outcome(self, jira_client):
+        jira_client._jira.search_issues.return_value = []
+        children = jira_client.fetch_outcome_children("RHAISTRAT-9999", "Test")
+        assert children == []
+
+    def test_failed_query_returns_empty(self, jira_client):
+        from jira import JIRAError
+
+        error = JIRAError(status_code=400, text="Bad query")
+        error.response = None
+        jira_client._jira.search_issues.side_effect = error
+        children = jira_client.fetch_outcome_children("BAD-KEY", "Test")
+        assert children == []  # graceful degradation
+
+    def test_source_pass_is_outcome(self, jira_client, mock_jira_issues):
+        jira_client._jira.search_issues.return_value = [mock_jira_issues[0]]
+        children = jira_client.fetch_outcome_children("RHAISTRAT-9001", "MaaS")
+        assert len(children) == 1
+        assert children[0].source_pass == "outcome"
+
+    def test_jql_contains_parent_key(self, jira_client):
+        jira_client._jira.search_issues.return_value = []
+        jira_client.fetch_outcome_children("RHAISTRAT-9001", "MaaS")
+        call_args = jira_client._jira.search_issues.call_args
+        jql = call_args[0][0]
+        assert 'parent = "RHAISTRAT-9001"' in jql
+        assert "status NOT IN" in jql
+
+    def test_jql_excludes_closed_statuses(self, jira_client):
+        jira_client._jira.search_issues.return_value = []
+        jira_client.fetch_outcome_children("RHAISTRAT-9001", "MaaS")
+        call_args = jira_client._jira.search_issues.call_args
+        jql = call_args[0][0]
+        for status in ("Closed", "Done", "Resolved", "Cancelled"):
+            assert f'"{status}"' in jql
 
 
 class TestGetRfeLink:
@@ -124,166 +180,6 @@ class TestGetRfeLink:
         rfe_key, rfe_status = jira_client.get_rfe_link(issue)
         assert rfe_key == ""
         assert rfe_status == ""
-
-
-class TestApplyExcludeKeywords:
-    """Tests for JiraClient._apply_exclude_keywords()."""
-
-    def test_exclude_keywords_filter(self, jira_client):
-        candidates = [
-            Candidate(big_rock="Test", issue_key="A-1", summary="Tool calling support"),
-            Candidate(big_rock="Test", issue_key="A-2", summary="Multimodal inference"),
-            Candidate(big_rock="Test", issue_key="A-3", summary="Basic model serving"),
-        ]
-        filtered = jira_client._apply_exclude_keywords(candidates, ["multimodal"])
-        assert len(filtered) == 2
-        keys = [c.issue_key for c in filtered]
-        assert "A-2" not in keys
-        assert "A-1" in keys
-        assert "A-3" in keys
-
-    def test_exclude_keywords_case_insensitive(self, jira_client):
-        candidates = [
-            Candidate(big_rock="Test", issue_key="A-1", summary="MULTIMODAL Support"),
-        ]
-        filtered = jira_client._apply_exclude_keywords(candidates, ["multimodal"])
-        assert len(filtered) == 0
-
-    def test_exclude_keywords_empty(self, jira_client):
-        candidates = [
-            Candidate(big_rock="Test", issue_key="A-1", summary="Some feature"),
-        ]
-        filtered = jira_client._apply_exclude_keywords(candidates, [])
-        assert len(filtered) == 1
-
-
-class TestFetchCandidatesForRock:
-    """Tests for JiraClient.fetch_candidates_for_rock()."""
-
-    def test_three_pass_discovery(self, jira_client, mock_jira_issues):
-        # Pass 1 returns issue 0 (has fixVersion)
-        # Pass 2 returns issues 0, 1 (0 already seen)
-        # Pass 3 returns issue 3 (RFE)
-        call_count = 0
-
-        def mock_search(jql, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if "fixVersion IN" in jql:
-                return [mock_jira_issues[0]]  # Pass 1: committed
-            elif "project = RHAIRFE" in jql:
-                return [mock_jira_issues[3]]  # Pass 3: RFE
-            else:
-                return [mock_jira_issues[0], mock_jira_issues[1]]  # Pass 2: candidates
-
-        jira_client._jira.search_issues.side_effect = mock_search
-
-        rock = BigRock(
-            priority=1,
-            name="MaaS",
-            full_name="MaaS",
-            components=["MaaS"],
-            jql='project in (RHOAIENG) AND component = "MaaS" ORDER BY priority ASC',
-            rfe_jql='project = RHAIRFE AND component = "MaaS" ORDER BY priority ASC',
-        )
-
-        candidates = jira_client.fetch_candidates_for_rock(
-            rock=rock,
-            release="3.5",
-            fix_versions=["RHOAI 3.5", "3.5"],
-            passes=[1, 2, 3],
-        )
-
-        # Should have 3 unique candidates
-        # (issue 0 from pass 1, issue 1 from pass 2, issue 3 from pass 3)
-        assert len(candidates) == 3
-        passes_found = {c.source_pass for c in candidates}
-        assert "committed" in passes_found
-        assert "candidate" in passes_found
-        assert "rfe" in passes_found
-
-    def test_single_pass_only(self, jira_client, mock_jira_issues):
-        jira_client._jira.search_issues.return_value = [mock_jira_issues[0]]
-
-        rock = BigRock(
-            priority=1,
-            name="MaaS",
-            full_name="MaaS",
-            components=["MaaS"],
-            jql='project in (RHOAIENG) AND component = "MaaS" ORDER BY key ASC',
-        )
-
-        candidates = jira_client.fetch_candidates_for_rock(
-            rock=rock,
-            release="3.5",
-            fix_versions=["RHOAI 3.5"],
-            passes=[1],
-        )
-
-        assert len(candidates) == 1
-        assert candidates[0].source_pass == "committed"
-
-    def test_seen_keys_excluded(self, jira_client, mock_jira_issues):
-        jira_client._jira.search_issues.return_value = [mock_jira_issues[0]]
-
-        rock = BigRock(
-            priority=1,
-            name="MaaS",
-            full_name="MaaS",
-            components=["MaaS"],
-            jql='project in (RHOAIENG) AND component = "MaaS" ORDER BY key ASC',
-        )
-
-        # Issue 0's key is already seen
-        candidates = jira_client.fetch_candidates_for_rock(
-            rock=rock,
-            release="3.5",
-            fix_versions=["RHOAI 3.5"],
-            passes=[1],
-            seen_keys={mock_jira_issues[0].key},
-        )
-
-        assert len(candidates) == 0
-
-
-class TestAppendOpenStatusFilter:
-    """Tests for JiraClient._append_open_status_filter()."""
-
-    def test_appends_filter_no_order_by(self):
-        jql = "project = TEST"
-        result = JiraClient._append_open_status_filter(jql)
-        assert "status NOT IN" in result
-        assert result.startswith("project = TEST AND")
-
-    def test_inserts_before_order_by(self):
-        jql = "project = TEST ORDER BY priority ASC"
-        result = JiraClient._append_open_status_filter(jql)
-        assert "status NOT IN" in result
-        assert result.endswith("ORDER BY priority ASC")
-        assert "AND status NOT IN" in result
-
-    def test_case_insensitive_order_by(self):
-        jql = "project = TEST order by key ASC"
-        result = JiraClient._append_open_status_filter(jql)
-        assert "status NOT IN" in result
-        assert "order by key ASC" in result
-
-    def test_mixed_case_order_by(self):
-        jql = "project = TEST Order By priority DESC"
-        result = JiraClient._append_open_status_filter(jql)
-        assert "status NOT IN" in result
-        assert "Order By priority DESC" in result
-
-    def test_order_by_with_extra_whitespace(self):
-        jql = "project = TEST ORDER  BY priority ASC"
-        result = JiraClient._append_open_status_filter(jql)
-        assert "status NOT IN" in result
-        assert "ORDER  BY priority ASC" in result
-
-    def test_excludes_all_closed_statuses(self):
-        result = JiraClient._append_open_status_filter("project = TEST")
-        for status in ("Closed", "Done", "Resolved", "Cancelled"):
-            assert f'"{status}"' in result
 
 
 class TestCloudDetection:

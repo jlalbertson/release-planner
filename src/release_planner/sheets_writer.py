@@ -48,6 +48,8 @@ class SheetsWriter:
         candidates: dict[str, list[Candidate]],
         release: str,
         credentials: Credentials,
+        per_rock_stats: dict[str, dict[str, int]] | None = None,
+        outcome_summaries: dict[str, str] | None = None,
     ):
         """Initialize the Sheets writer.
 
@@ -56,11 +58,15 @@ class SheetsWriter:
             candidates: Map of big_rock_name -> list of Candidate, in display order.
             release: Release version string (e.g. "3.5") for worksheet naming.
             credentials: Google service account credentials (already scoped).
+            per_rock_stats: Optional dict of rock_name -> {"features": N, "rfes": N}.
+            outcome_summaries: Optional dict of outcome_key -> summary (title).
         """
         self._big_rocks = big_rocks
         self._candidates = candidates
         self._release = release
         self._gc = gspread.authorize(credentials)
+        self._per_rock_stats = per_rock_stats or {}
+        self._outcome_summaries = outcome_summaries or {}
 
         # Split candidates into features (RHAISTRAT) and RFEs (RHAIRFE)
         self._features: dict[str, list[Candidate]] = {}
@@ -134,8 +140,8 @@ class SheetsWriter:
         return url
 
     def _write_feature_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
-        """Write the 'Engineering Commitments {release}' worksheet (RHAISTRAT features)."""
-        ws_name = f"Engineering Commitments {self._release}"
+        """Write the 'Proposed Features' worksheet (RHAISTRAT features)."""
+        ws_name = "Proposed Features"
         worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
 
         rows: list[list[str | int | float | None]] = []
@@ -151,8 +157,8 @@ class SheetsWriter:
             logger.info("Wrote %d rows to '%s' worksheet", len(rows) - 1, ws_name)
 
     def _write_rfe_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
-        """Write the 'RFEs {release}' worksheet (RHAIRFE issues)."""
-        ws_name = f"RFEs {self._release}"
+        """Write the 'Proposed RFEs' worksheet (RHAIRFE issues)."""
+        ws_name = "Proposed RFEs"
         worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
 
         rows: list[list[str | int | float | None]] = []
@@ -168,20 +174,38 @@ class SheetsWriter:
             logger.info("Wrote %d rows to '%s' worksheet", len(rows) - 1, ws_name)
 
     def _write_big_rocks_worksheet(self, spreadsheet: gspread.Spreadsheet) -> None:
-        """Write the 'Summit Big Rocks' worksheet. Clears existing data first."""
-        ws_name = "Summit Big Rocks"
+        """Write the 'Big Rocks' worksheet. Clears existing data first."""
+        ws_name = "Big Rocks"
         worksheet = self._get_or_create_worksheet(spreadsheet, ws_name)
 
         rows: list[list[str | int | float | None]] = []
         rows.append(list(BIG_ROCK_COLUMNS))
 
         for rock in self._big_rocks:
+            stats = self._per_rock_stats.get(rock.name, {})
+            outcome_formula = ""
+            if rock.outcome_keys:
+                links = [self._build_hyperlink_formula(k) for k in rock.outcome_keys]
+                if len(links) == 1:
+                    outcome_formula = links[0]
+                else:
+                    outcome_formula = "=" + '&", "&'.join(
+                        link.lstrip("=") for link in links
+                    )
+            outcome_desc_parts = [
+                self._outcome_summaries.get(k, "") for k in rock.outcome_keys
+            ]
+            outcome_desc = "; ".join(d for d in outcome_desc_parts if d)
             row: list[str | int | float | None] = [
                 rock.pillar,
                 rock.priority,
                 rock.name,
+                outcome_formula,
+                outcome_desc,
                 rock.state,
                 rock.owner,
+                stats.get("features", 0),
+                stats.get("rfes", 0),
                 "",  # Notes left blank for now
             ]
             rows.append(row)
@@ -195,9 +219,9 @@ class SheetsWriter:
         """Apply header formatting, conditional formatting, column widths, and frozen rows."""
         requests: list[dict] = []
 
-        features_ws_name = f"Engineering Commitments {self._release}"
-        rfes_ws_name = f"RFEs {self._release}"
-        big_rocks_ws_name = "Summit Big Rocks"
+        features_ws_name = "Proposed Features"
+        rfes_ws_name = "Proposed RFEs"
+        big_rocks_ws_name = "Big Rocks"
 
         features_ws_id = None
         rfes_ws_id = None
@@ -498,6 +522,7 @@ class SheetsWriter:
             s(candidate.summary),
             s(candidate.components),
             s(candidate.target_release),
+            s(candidate.fix_version),
             s(candidate.pm),
             s(candidate.delivery_owner),
             self._build_hyperlink_formula(candidate.rfe) if candidate.rfe else "",

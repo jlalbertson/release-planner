@@ -102,9 +102,8 @@ class TestLoadBigRocks:
 
     def test_load_big_rocks_from_config_dir(self, config_dir):
         rocks, config = load_big_rocks(config_dir)
-        assert len(rocks) == 10
+        assert len(rocks) == 14
         assert config.release == "3.5"
-        assert config.exclude_fix_version_patterns == ["3.4"]
 
     def test_all_rocks_present(self, config_dir):
         rocks, _ = load_big_rocks(config_dir)
@@ -114,35 +113,22 @@ class TestLoadBigRocks:
             "Gen AI Studio",
             "BYO Agent",
             "Tool Calling",
-            "llm-d",
+            "llm-d / xKS",
+            "Upgrade Support",
             "Eval Hub",
-            "AI Hub",
+            "AI Hub incl MCP",
             "Observability",
+            "Multitenancy",
             "AutoRAG",
+            "AI Safety",
+            "vLLM Multimodal",
             "AutoML",
         ]
         assert names == expected_names
 
-    def test_release_placeholder_substituted(self, config_dir):
-        rocks, config = load_big_rocks(config_dir)
-        # JQL should have the release version substituted
-        for rock in rocks:
-            assert "{release}" not in rock.jql
-            assert "{projects}" not in rock.jql
-            if rock.rfe_jql:
-                assert "{release}" not in rock.rfe_jql
-
-    def test_fix_versions_substituted(self, config_dir):
-        _, config = load_big_rocks(config_dir)
-        assert "RHOAI 3.5" in config.fix_versions
-        assert "3.5" in config.fix_versions
-        assert "3.5.0" in config.fix_versions
-        assert "RHAIIS-3.5" in config.fix_versions
-
     def test_release_override(self, config_dir):
         rocks, config = load_big_rocks(config_dir, release="4.0")
         assert config.release == "4.0"
-        assert "RHOAI 4.0" in config.fix_versions
 
     def test_missing_config_dir_raises(self):
         with pytest.raises(FileNotFoundError):
@@ -151,15 +137,14 @@ class TestLoadBigRocks:
     def test_priorities_are_sequential(self, config_dir):
         rocks, _ = load_big_rocks(config_dir)
         priorities = [r.priority for r in rocks]
-        assert priorities == list(range(1, 11))
+        assert priorities == list(range(1, 15))
 
     def test_rocks_have_required_fields(self, config_dir):
         rocks, _ = load_big_rocks(config_dir)
         for rock in rocks:
             assert rock.name
             assert rock.full_name
-            assert rock.jql
-            assert rock.components
+            assert isinstance(rock.outcome_keys, list)
             assert rock.priority >= 1
 
 

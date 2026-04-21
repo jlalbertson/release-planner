@@ -85,85 +85,84 @@ class Settings:
             query_delay=query_delay,
         )
 
+    @classmethod
+    def for_web(cls) -> Settings:
+        """Load settings for the web server. Jira credentials are optional (demo mode).
+
+        Unlike from_env(), this never raises for missing JIRA_TOKEN or
+        GOOGLE_CREDENTIALS. The web server starts in demo mode when
+        JIRA_TOKEN is absent.
+        """
+        load_dotenv()
+
+        token = os.environ.get("RELEASE_PLANNER_JIRA_TOKEN") or os.environ.get("JIRA_TOKEN", "")
+
+        query_delay_str = os.environ.get("JIRA_QUERY_DELAY", "")
+        try:
+            query_delay = float(query_delay_str) if query_delay_str else JIRA_QUERY_DELAY_DEFAULT
+        except ValueError:
+            query_delay = JIRA_QUERY_DELAY_DEFAULT
+
+        return cls(
+            jira_server=os.environ.get("JIRA_SERVER", JIRA_SERVER_DEFAULT),
+            jira_token=token,
+            jira_email=os.environ.get("JIRA_EMAIL"),
+            google_credentials_file=None,  # Not needed for web
+            google_credentials_json=None,
+            default_spreadsheet_id=None,
+            config_dir=os.environ.get("CONFIG_DIR", "./config"),
+            data_dir=os.environ.get("DATA_DIR", "./data"),
+            log_level=os.environ.get("LOG_LEVEL", "INFO"),
+            query_delay=query_delay,
+        )
+
 
 @dataclass
 class BigRockConfig:
     """Parsed big_rocks.yaml configuration."""
 
     release: str
-    fix_versions: list[str]
-    projects: str
     big_rocks: list[BigRock]
-    exclude_fix_version_patterns: list[str] = field(default_factory=list)
 
 
-def load_big_rocks_config(config_dir: str) -> BigRockConfig:
-    """Parse big_rocks.yaml into a BigRockConfig with raw (unsubstituted) data.
+def load_big_rocks(
+    config_dir: str,
+    release: str | None = None,
+    *,
+    config_file: str = "big_rocks.yaml",
+) -> tuple[list[BigRock], BigRockConfig]:
+    """Parse big_rocks.yaml into BigRock models.
+
+    Args:
+        config_dir: Path to config directory containing big_rocks.yaml.
+        release: Override release version. If None, uses the value from YAML.
+        config_file: Name of the config file to load (keyword-only).
+            Defaults to "big_rocks.yaml". The web server uses this to load
+            release-specific files like "big_rocks-3.5.yaml".
 
     Returns:
-        BigRockConfig with raw YAML data. Call substitute_release() to fill placeholders.
+        Tuple of (list of BigRock models, BigRockConfig).
     """
-    config_path = Path(config_dir) / "big_rocks.yaml"
+    config_path = Path(config_dir) / config_file
     if not config_path.exists():
         raise FileNotFoundError(f"Big Rocks config not found: {config_path}")
 
     with open(config_path) as f:
         raw = yaml.safe_load(f)
 
-    release = raw.get("release", "")
-    projects = raw.get("projects", "")
-    fix_versions_raw = raw.get("fix_versions", [])
-    exclude_fix_version_patterns = raw.get("exclude_fix_version_patterns", [])
+    effective_release = release or raw.get("release", "")
 
     rocks_raw = raw.get("big_rocks", [])
     rocks: list[BigRock] = []
     for rock_data in rocks_raw:
         rocks.append(BigRock(**rock_data))
 
-    return BigRockConfig(
-        release=release,
-        fix_versions=fix_versions_raw,
-        projects=projects,
+    config = BigRockConfig(
+        release=effective_release,
         big_rocks=rocks,
-        exclude_fix_version_patterns=exclude_fix_version_patterns,
     )
 
-
-def load_big_rocks(
-    config_dir: str, release: str | None = None
-) -> tuple[list[BigRock], BigRockConfig]:
-    """Parse big_rocks.yaml and substitute {release} and {projects} placeholders.
-
-    Args:
-        config_dir: Path to config directory containing big_rocks.yaml.
-        release: Override release version. If None, uses the value from YAML.
-
-    Returns:
-        Tuple of (list of BigRock models with substituted JQL, BigRockConfig).
-    """
-    config = load_big_rocks_config(config_dir)
-
-    effective_release = release or config.release
-    projects = config.projects
-
-    # Substitute placeholders in fix_versions
-    fix_versions = [fv.replace("{release}", effective_release) for fv in config.fix_versions]
-
-    # Substitute placeholders in each rock's JQL
-    substituted_rocks: list[BigRock] = []
-    for rock in config.big_rocks:
-        jql = rock.jql.replace("{release}", effective_release).replace("{projects}", projects)
-        rfe_jql = rock.rfe_jql.replace("{release}", effective_release).replace(
-            "{projects}", projects
-        )
-        substituted = rock.model_copy(update={"jql": jql, "rfe_jql": rfe_jql})
-        substituted_rocks.append(substituted)
-
-    config.release = effective_release
-    config.fix_versions = fix_versions
-    config.big_rocks = substituted_rocks
-
-    return substituted_rocks, config
+    return rocks, config
 
 
 def load_field_mapping(data_dir: str) -> dict[str, str]:
