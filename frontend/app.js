@@ -247,40 +247,33 @@ function renderSummaryCards(filteredFeatures, filteredRfes, filteredRocks) {
 
   if (!currentData) return;
 
-  // Count Tier 1 vs Tier 2 in filtered results
+  // Count tiers in filtered results
   var tier1Features = 0;
   var tier2Features = 0;
+  var tier3Features = 0;
   for (var j = 0; j < filteredFeatures.length; j++) {
-    if (filteredFeatures[j].big_rock) {
-      tier1Features++;
-    } else {
-      tier2Features++;
-    }
+    var ft = filteredFeatures[j].tier || 1;
+    if (ft === 3) { tier3Features++; }
+    else if (ft === 2) { tier2Features++; }
+    else { tier1Features++; }
   }
 
   var tier1Rfes = 0;
   var tier2Rfes = 0;
   for (var k = 0; k < filteredRfes.length; k++) {
-    if (filteredRfes[k].big_rock) {
-      tier1Rfes++;
-    } else {
-      tier2Rfes++;
-    }
+    var rt = filteredRfes[k].tier || 1;
+    if (rt === 2) { tier2Rfes++; }
+    else { tier1Rfes++; }
   }
 
-  var tier1Desc = currentData.summary.tier1
-    ? currentData.summary.tier1.description
-    : "Big Rock-associated features and RFEs essential for this release.";
-  var tier2Desc = currentData.summary.tier2
-    ? currentData.summary.tier2.description
-    : "Features and RFEs not tied to Big Rocks but important for customers.";
+  var releaseLabel = currentVersion ? "rhoai-" + currentVersion : "this";
 
   // Tier 1 card
   var tier1Card = document.createElement("div");
   tier1Card.className = "summary-card";
   tier1Card.innerHTML =
-    '<div class="card-title">Tier 1</div>' +
-    '<div class="card-desc">' + escapeHtml(tier1Desc) + '</div>' +
+    '<div class="card-title">Tier 1: Milestone Essentials</div>' +
+    '<div class="card-desc">Must-have for ' + escapeHtml(releaseLabel) + ' release</div>' +
     '<div class="card-stat">' + tier1Features + ' <span>features</span></div>' +
     '<div class="card-stat">' + tier1Rfes + ' <span>RFEs</span></div>';
   container.appendChild(tier1Card);
@@ -289,11 +282,20 @@ function renderSummaryCards(filteredFeatures, filteredRfes, filteredRocks) {
   var tier2Card = document.createElement("div");
   tier2Card.className = "summary-card";
   tier2Card.innerHTML =
-    '<div class="card-title">Tier 2</div>' +
-    '<div class="card-desc">' + escapeHtml(tier2Desc) + '</div>' +
+    '<div class="card-title">Tier 2: Enhancements</div>' +
+    '<div class="card-desc">High-value UX/Customer impact</div>' +
     '<div class="card-stat">' + tier2Features + ' <span>features</span></div>' +
     '<div class="card-stat">' + tier2Rfes + ' <span>RFEs</span></div>';
   container.appendChild(tier2Card);
+
+  // Tier 3 card
+  var tier3Card = document.createElement("div");
+  tier3Card.className = "summary-card";
+  tier3Card.innerHTML =
+    '<div class="card-title">Tier 3: Collaborative Support</div>' +
+    '<div class="card-desc">Cross-team priorities</div>' +
+    '<div class="card-stat">' + tier3Features + ' <span>features</span></div>';
+  container.appendChild(tier3Card);
 
   // Total card
   var totalCard = document.createElement("div");
@@ -365,6 +367,13 @@ function renderBigRocksTable(rocks) {
   }
 }
 
+function tierLabel(tierNum) {
+  if (tierNum === 1) return "Tier 1: Milestone Essentials";
+  if (tierNum === 2) return "Tier 2: Enhancements";
+  if (tierNum === 3) return "Tier 3: Collaborative Support";
+  return "Tier " + tierNum;
+}
+
 function renderFeaturesTable(features) {
   var tbody = document.querySelector("#features-table tbody");
   tbody.innerHTML = "";
@@ -375,9 +384,20 @@ function renderFeaturesTable(features) {
   }
 
   var baseUrl = currentData.jira_base_url;
+  var currentTier = 0;
 
   for (var i = 0; i < features.length; i++) {
     var f = features[i];
+    var ft = f.tier || 1;
+
+    if (ft !== currentTier) {
+      currentTier = ft;
+      var sep = document.createElement("tr");
+      sep.className = "tier-separator";
+      sep.innerHTML = '<td colspan="13">' + tierLabel(currentTier) + '</td>';
+      tbody.appendChild(sep);
+    }
+
     var issueLink = '<a class="issue-link" href="' + baseUrl + '/' + f.issue_key + '" target="_blank" rel="noopener">' + escapeHtml(f.issue_key) + '</a>';
     var rfeLink = f.rfe
       ? '<a class="issue-link" href="' + baseUrl + '/' + f.rfe + '" target="_blank" rel="noopener">' + escapeHtml(f.rfe) + '</a>'
@@ -412,9 +432,20 @@ function renderRfesTable(rfes) {
   }
 
   var baseUrl = currentData.jira_base_url;
+  var currentTier = 0;
 
   for (var i = 0; i < rfes.length; i++) {
     var r = rfes[i];
+    var rt = r.tier || 1;
+
+    if (rt !== currentTier) {
+      currentTier = rt;
+      var sep = document.createElement("tr");
+      sep.className = "tier-separator";
+      sep.innerHTML = '<td colspan="8">' + tierLabel(currentTier) + '</td>';
+      tbody.appendChild(sep);
+    }
+
     var issueLink = '<a class="issue-link" href="' + baseUrl + '/' + r.issue_key + '" target="_blank" rel="noopener">' + escapeHtml(r.issue_key) + '</a>';
 
     var tr = document.createElement("tr");
@@ -434,19 +465,17 @@ function renderRfesTable(rfes) {
 // ---- Tab count display ----
 
 function updateTabCount(rocks, features, rfes) {
-  var activeTab = document.querySelector(".tab.active");
-  var countEl = document.getElementById("tab-count");
-  if (!activeTab) {
-    countEl.textContent = "";
-    return;
-  }
-  var tabName = activeTab.dataset.tab;
-  if (tabName === "big-rocks") {
-    countEl.textContent = rocks.length + " big rock" + (rocks.length !== 1 ? "s" : "");
-  } else if (tabName === "features") {
-    countEl.textContent = features.length + " feature" + (features.length !== 1 ? "s" : "");
-  } else if (tabName === "rfes") {
-    countEl.textContent = rfes.length + " RFE" + (rfes.length !== 1 ? "s" : "");
+  var tabs = document.querySelectorAll(".tab");
+  for (var i = 0; i < tabs.length; i++) {
+    var tab = tabs[i];
+    var name = tab.dataset.tab;
+    if (name === "big-rocks") {
+      tab.textContent = "Big Rocks (" + rocks.length + ")";
+    } else if (name === "features") {
+      tab.textContent = "Features (" + features.length + ")";
+    } else if (name === "rfes") {
+      tab.textContent = "RFEs (" + rfes.length + ")";
+    }
   }
 }
 

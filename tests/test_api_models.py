@@ -79,7 +79,7 @@ class TestFeatureRow:
         expected = {
             "big_rock", "issue_key", "status", "priority", "phase",
             "summary", "components", "target_release", "fix_version",
-            "pm", "delivery_owner", "rfe", "labels",
+            "pm", "delivery_owner", "rfe", "labels", "tier",
         }
         assert field_names == expected
 
@@ -126,7 +126,7 @@ class TestRfeRow:
         field_names = set(RfeRow.model_fields.keys())
         expected = {
             "big_rock", "issue_key", "status", "priority",
-            "summary", "components", "pm", "labels",
+            "summary", "components", "pm", "labels", "tier",
         }
         assert field_names == expected
 
@@ -204,6 +204,7 @@ class TestCandidateResponse:
                 rocks_with_data=1,
                 tier1=TierSummary(features=2, rfes=1, description="Tier 1"),
                 tier2=TierSummary(features=0, rfes=0, description="Tier 2"),
+                tier3=TierSummary(features=0, rfes=0, description="Tier 3"),
                 per_rock={"MaaS": PillarSummary(features=2, rfes=1)},
             ),
             big_rocks=[
@@ -324,6 +325,7 @@ class TestSummaryStats:
             rocks_with_data=10,
             tier1=TierSummary(features=30, rfes=12, description="Tier 1"),
             tier2=TierSummary(features=12, rfes=6, description="Tier 2"),
+            tier3=TierSummary(features=0, rfes=0, description="Tier 3"),
             per_rock={},
         )
         assert stats.total_features == 42
@@ -337,6 +339,7 @@ class TestSummaryStats:
             rocks_with_data=2,
             tier1=TierSummary(features=7, rfes=3, description="Tier 1"),
             tier2=TierSummary(features=3, rfes=2, description="Tier 2"),
+            tier3=TierSummary(features=0, rfes=0, description="Tier 3"),
             per_rock={"MaaS": PillarSummary(features=5, rfes=3)},
         )
         data = stats.model_dump()

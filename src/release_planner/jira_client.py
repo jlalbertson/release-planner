@@ -643,6 +643,49 @@ class JiraClient:
         logger.info("Found %d Tier 2 RFEs for release %s", len(candidates), release)
         return candidates
 
+    def fetch_tier3_features(
+        self,
+        exclude_keys: set[str],
+    ) -> list[Candidate]:
+        """Fetch Tier 3 features: In Progress RHAISTRAT with no target release or fix version.
+
+        JQL: project = RHAISTRAT AND type = Feature
+             AND status = "In Progress"
+             AND "Target Release" is EMPTY
+             AND fixVersion is EMPTY
+
+        Args:
+            exclude_keys: Set of issue keys already discovered as Tier 1 or Tier 2.
+
+        Returns:
+            List of Candidate models with empty big_rock.
+        """
+        jql = (
+            'project = RHAISTRAT AND type = Feature '
+            'AND status = "In Progress" '
+            'AND "Target Release" is EMPTY '
+            'AND fixVersion is EMPTY '
+            'ORDER BY key ASC'
+        )
+
+        logger.info("Fetching Tier 3 features")
+
+        try:
+            raw_issues = self.search_issues(jql)
+        except RuntimeError as e:
+            logger.error("Failed to fetch Tier 3 features: %s", e)
+            return []
+
+        candidates = []
+        for issue in raw_issues:
+            if issue.key in exclude_keys:
+                continue
+            candidate = self.map_to_candidate(issue, big_rock_name="", source_pass="tier3")
+            candidates.append(candidate)
+
+        logger.info("Found %d Tier 3 features", len(candidates))
+        return candidates
+
     @staticmethod
     def _get_parent_rfe_key(issue: Any) -> str:
         """Find linked RHAIRFE key for a RHAISTRAT via Clones link or description.

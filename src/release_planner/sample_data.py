@@ -392,6 +392,7 @@ _SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
         delivery_owner="Paul Adams",
         rfe="",
         labels="3.5-candidate",
+        tier=2,
     ),
     FeatureRow(
         big_rock="",
@@ -407,6 +408,7 @@ _SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
         delivery_owner="",
         rfe="RHAIRFE-850",
         labels="",
+        tier=2,
     ),
     FeatureRow(
         big_rock="",
@@ -422,6 +424,58 @@ _SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
         delivery_owner="",
         rfe="RHAIRFE-851",
         labels="",
+        tier=2,
+    ),
+]
+
+_SAMPLE_TIER3_FEATURES: list[FeatureRow] = [
+    FeatureRow(
+        big_rock="",
+        issue_key="RHAISTRAT-1900",
+        status="In Progress",
+        priority="Critical",
+        phase="",
+        summary="Ray Jobs integration for distributed training",
+        components="Platform, Training",
+        target_release="",
+        fix_version="",
+        pm="Tina Nguyen",
+        delivery_owner="Quinn Roberts",
+        rfe="",
+        labels="",
+        tier=3,
+    ),
+    FeatureRow(
+        big_rock="",
+        issue_key="RHAISTRAT-1901",
+        status="In Progress",
+        priority="Major",
+        phase="",
+        summary="Feast feature store integration",
+        components="Data, Platform",
+        target_release="",
+        fix_version="",
+        pm="Oscar Park",
+        delivery_owner="Rita Santos",
+        rfe="",
+        labels="",
+        tier=3,
+    ),
+    FeatureRow(
+        big_rock="",
+        issue_key="RHAISTRAT-1902",
+        status="In Progress",
+        priority="Normal",
+        phase="",
+        summary="Jupyter notebook template gallery",
+        components="Platform",
+        target_release="",
+        fix_version="",
+        pm="Tina Nguyen",
+        delivery_owner="",
+        rfe="",
+        labels="",
+        tier=3,
     ),
 ]
 
@@ -435,6 +489,7 @@ _SAMPLE_TIER2_RFES: list[RfeRow] = [
         components="Dashboard",
         pm="Tina Nguyen",
         labels="3.5-candidate",
+        tier=2,
     ),
     RfeRow(
         big_rock="",
@@ -445,6 +500,7 @@ _SAMPLE_TIER2_RFES: list[RfeRow] = [
         components="Platform, Auth",
         pm="Oscar Park",
         labels="3.5-candidate",
+        tier=2,
     ),
 ]
 
@@ -543,7 +599,8 @@ def get_sample_response(version: str = "3.5") -> CandidateResponse:
     """
     tier1_features = _SAMPLE_FEATURES
     tier2_features = _SAMPLE_TIER2_FEATURES
-    features = tier1_features + tier2_features
+    tier3_features = _SAMPLE_TIER3_FEATURES
+    features = tier1_features + tier2_features + tier3_features
     tier1_rfes = _SAMPLE_RFES
     tier2_rfes = _SAMPLE_TIER2_RFES
     rfes = tier1_rfes + tier2_rfes
@@ -573,6 +630,11 @@ def get_sample_response(version: str = "3.5") -> CandidateResponse:
         rfes=len(tier2_rfes),
         description="Features and RFEs not tied to Big Rocks, but PM believes are important for customers or represent significant usability improvements.",
     )
+    tier3 = TierSummary(
+        features=len(tier3_features),
+        rfes=0,
+        description="Not Big Rock or customer demanded, but potentially could be worked on by other teams — candidates for review support and development assistance.",
+    )
 
     summary = SummaryStats(
         total_features=len(features),
@@ -581,6 +643,7 @@ def get_sample_response(version: str = "3.5") -> CandidateResponse:
         rocks_with_data=rocks_with_data,
         tier1=tier1,
         tier2=tier2,
+        tier3=tier3,
         per_rock=per_rock,
     )
 

@@ -51,6 +51,7 @@ class PipelineResult:
     tier1_rfes: int = 0
     tier2_features: int = 0
     tier2_rfes: int = 0
+    tier3_features: int = 0
 
     # Stats and metadata
     per_rock_stats: dict[str, dict[str, int]] = field(default_factory=dict)
@@ -63,6 +64,8 @@ class PipelineResult:
 
 # Terminal statuses not covered by JQL closed-status filter
 _TERMINAL_STATUSES = {"Review", "Pending Release"}
+
+_PRIORITY_ORDER = {"Blocker": 0, "Critical": 1, "Major": 2, "Normal": 3, "Minor": 4}
 
 
 def run_pipeline(
@@ -275,13 +278,21 @@ def run_pipeline(
         updated = candidate.model_copy(update={"big_rock": merged_name})
         all_rfes.append(updated)
 
-    # Sort: features by Big Rock priority order, then issue_key
+    # Sort Tier 1: by Big Rock priority, then feature priority within each rock
     rock_priority = {r.name: r.priority for r in big_rocks}
     all_features.sort(
-        key=lambda c: (rock_priority.get(c.big_rock.split(", ")[0], 999), c.issue_key)
+        key=lambda c: (
+            rock_priority.get(c.big_rock.split(", ")[0], 999),
+            _PRIORITY_ORDER.get(c.priority, 99),
+            c.issue_key,
+        )
     )
     all_rfes.sort(
-        key=lambda c: (rock_priority.get(c.big_rock.split(", ")[0], 999), c.issue_key)
+        key=lambda c: (
+            rock_priority.get(c.big_rock.split(", ")[0], 999),
+            _PRIORITY_ORDER.get(c.priority, 99),
+            c.issue_key,
+        )
     )
 
     # Build output dict keyed by rock name (for writer compatibility)
@@ -363,6 +374,14 @@ def run_pipeline(
             continue
         filtered_t2_features.append(c)
 
+    # Sort Tier 2 by priority
+    filtered_t2_features.sort(
+        key=lambda c: (_PRIORITY_ORDER.get(c.priority, 99), c.issue_key)
+    )
+    tier2_rfes.sort(
+        key=lambda c: (_PRIORITY_ORDER.get(c.priority, 99), c.issue_key)
+    )
+
     logger.info(
         "Tier 2: %d features, %d RFEs",
         len(filtered_t2_features),
@@ -378,6 +397,40 @@ def run_pipeline(
     if tier2_all:
         all_candidates[""] = tier2_all
 
+    # --- Phase D: Tier 3 discovery (features only) ---
+    tier2_feature_keys = {c.issue_key for c in filtered_t2_features}
+    tier3_exclude = tier1_feature_keys | tier2_feature_keys
+    tier3_features = jira_client.fetch_tier3_features(tier3_exclude)
+
+    # Post-filter Tier 3: terminal statuses and any version targeting
+    filtered_t3_features: list[Candidate] = []
+    for c in tier3_features:
+        if c.status in _TERMINAL_STATUSES:
+            terminal_filtered_count += 1
+            logger.debug("Skipping Tier 3 %s: terminal status '%s'", c.issue_key, c.status)
+            continue
+        if c.target_release or c.fix_version:
+            logger.debug(
+                "Skipping Tier 3 %s: has version targeting (target=%s, fix=%s)",
+                c.issue_key, c.target_release, c.fix_version,
+            )
+            continue
+        filtered_t3_features.append(c)
+
+    # Sort Tier 3 by priority
+    filtered_t3_features.sort(
+        key=lambda c: (_PRIORITY_ORDER.get(c.priority, 99), c.issue_key)
+    )
+
+    logger.info("Tier 3: %d features", len(filtered_t3_features))
+
+    # Append Tier 3 after Tier 2 in flat lists
+    final_features.extend(filtered_t3_features)
+
+    # Add Tier 3 to candidates dict under sentinel key for writer compatibility
+    if filtered_t3_features:
+        all_candidates["_tier3"] = filtered_t3_features
+
     return PipelineResult(
         candidates=all_candidates,
         big_rocks=active_rocks,
@@ -388,6 +441,7 @@ def run_pipeline(
         tier1_rfes=tier1_rfe_count,
         tier2_features=len(filtered_t2_features),
         tier2_rfes=len(tier2_rfes),
+        tier3_features=len(filtered_t3_features),
         per_rock_stats=per_rock_stats,
         outcome_summaries=outcome_summaries,
         release=release,

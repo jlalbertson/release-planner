@@ -342,12 +342,6 @@ main {
   border-bottom-color: var(--color-primary);
 }
 
-.tab-count {
-  padding: 8px 20px 0;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
 .tab-content {
   display: none;
 }
@@ -476,6 +470,20 @@ tbody tr:hover {
   margin-top: 12px;
   font-size: 14px;
   color: var(--color-text-secondary);
+}
+
+/* Tier separator rows */
+.tier-separator td {
+  background: #2a2a2a;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 12px;
+  letter-spacing: 0.02em;
+}
+
+tbody tr.tier-separator:hover {
+  background: #2a2a2a;
 }
 
 /* Empty state */

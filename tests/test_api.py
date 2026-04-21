@@ -130,6 +130,7 @@ class TestCandidatesEndpoint:
         assert "rocks_with_data" in summary
         assert "tier1" in summary
         assert "tier2" in summary
+        assert "tier3" in summary
         assert "per_rock" in summary
 
     def test_candidates_filter_options(self, client):

@@ -126,6 +126,10 @@ class ExcelWriter:
         for candidate in features.get("", []):
             ws.append(self._feature_row(candidate))
             row_count += 1
+        # Tier 3 features
+        for candidate in features.get("_tier3", []):
+            ws.append(self._feature_row(candidate))
+            row_count += 1
 
         self._format_header(ws, len(columns))
         self._set_column_widths(ws, columns, FEATURE_COLUMN_WIDTHS_CHARS)

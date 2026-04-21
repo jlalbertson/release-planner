@@ -62,6 +62,7 @@ class FeatureRow(BaseModel):
     delivery_owner: str
     rfe: str
     labels: str
+    tier: int = 1
 
 
 class RfeRow(BaseModel):
@@ -86,6 +87,7 @@ class RfeRow(BaseModel):
     components: str
     pm: str
     labels: str
+    tier: int = 1
 
 
 class PillarSummary(BaseModel):
@@ -112,6 +114,7 @@ class SummaryStats(BaseModel):
     rocks_with_data: int
     tier1: TierSummary
     tier2: TierSummary
+    tier3: TierSummary
     per_rock: dict[str, PillarSummary]
 
 

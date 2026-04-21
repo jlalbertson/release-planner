@@ -261,6 +261,14 @@ def _build_candidate_response(
             )
         )
 
+    # Determine tier from source_pass
+    def _tier_for(c) -> int:
+        if c.source_pass == "tier3":
+            return 3
+        if c.source_pass == "tier2":
+            return 2
+        return 1
+
     # Build FeatureRow list
     feature_rows: list[FeatureRow] = []
     for c in result.features:
@@ -279,6 +287,7 @@ def _build_candidate_response(
                 delivery_owner=c.delivery_owner,
                 rfe=c.rfe,
                 labels=c.labels,
+                tier=_tier_for(c),
             )
         )
 
@@ -295,6 +304,7 @@ def _build_candidate_response(
                 components=c.components,
                 pm=c.pm,
                 labels=c.labels,
+                tier=_tier_for(c),
             )
         )
 
@@ -324,6 +334,11 @@ def _build_candidate_response(
         rfes=result.tier2_rfes,
         description="Features and RFEs not tied to Big Rocks, but PM believes are important for customers or represent significant usability improvements.",
     )
+    tier3 = TierSummary(
+        features=result.tier3_features,
+        rfes=0,
+        description="Not Big Rock or customer demanded, but potentially could be worked on by other teams — candidates for review support and development assistance.",
+    )
 
     summary = SummaryStats(
         total_features=len(feature_rows),
@@ -332,6 +347,7 @@ def _build_candidate_response(
         rocks_with_data=rocks_with_data,
         tier1=tier1,
         tier2=tier2,
+        tier3=tier3,
         per_rock=per_rock,
     )
 

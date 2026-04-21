@@ -153,6 +153,9 @@ class SheetsWriter:
         # Tier 2 features (no Big Rock association)
         for candidate in self._features.get("", []):
             rows.append(self._feature_to_row(candidate))
+        # Tier 3 features
+        for candidate in self._features.get("_tier3", []):
+            rows.append(self._feature_to_row(candidate))
 
         if rows:
             worksheet.clear()
@@ -245,7 +248,7 @@ class SheetsWriter:
         if features_ws_id is not None:
             total_features = sum(
                 len(self._features.get(r.name, [])) for r in self._big_rocks
-            ) + len(self._features.get("", []))
+            ) + len(self._features.get("", [])) + len(self._features.get("_tier3", []))
             requests.extend(
                 self._worksheet_formatting_requests(
                     ws_id=features_ws_id,
