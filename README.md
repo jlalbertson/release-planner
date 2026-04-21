@@ -1,75 +1,92 @@
 # Release Planner
 
-RHOAI release planning spreadsheet generator. Uses **outcome-driven traversal** to discover candidate issues for each Big Rock from Jira, and writes the results to a Google Spreadsheet with two worksheets: **"{release} Candidates"** and **"Big Rocks"**.
+Web dashboard and CLI tool for RHOAI release planning. Discovers candidate features and RFEs from Jira using outcome-driven traversal, classifies them into tiers, and presents them in an interactive dashboard with filtering, sorting, and export.
 
-## Features
+## Web Dashboard
 
-- **Outcome-driven discovery:** Each Big Rock declares Jira Outcome keys; the planner queries `parent = <outcome_key>` to discover all direct children, then filters Features by Target Release and RFEs by candidate label
-- **17 Big Rocks** with outcome-based configuration (12 active, 5 awaiting outcome key assignment)
-- **Merge deduplication:** Features appearing under multiple Big Rocks get a single row with combined names sorted by priority
-- **Google Sheets output** via service account authentication
-- **Manual overrides** via YAML for fields not available in Jira
-- **Spreadsheet import** (`import-xlsx`) to bootstrap overrides from existing `.xlsx` files
-- **Field discovery** command to find custom field IDs on `issues.redhat.com`
-- **Rate limiting** and retry logic for Jira API calls
-
-## Quick Start
+The primary interface is a browser-based dashboard served by FastAPI.
 
 ```bash
 # Setup
 cd release-planner
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env  # Edit with your PAT and Google credentials path
+cp .env.example .env  # Edit with your Jira PAT
 
-# Discover Jira custom fields (first-time setup)
-python -m release_planner discover-fields --issue-key RHOAIENG-XXXX
+# Start the web server
+python -m release_planner serve
 
-# Validate configuration
-python -m release_planner validate-config
-
-# Generate to a new Google Spreadsheet
-python -m release_planner generate --create --spreadsheet-name "RHOAI 3.5 Candidates" --verbose
-
-# Generate to an existing spreadsheet
-python -m release_planner generate --spreadsheet-id YOUR_SPREADSHEET_ID --verbose
-
-# Dry run (query Jira but don't write to Google Sheets)
-python -m release_planner generate --dry-run --verbose
-
-# Import existing spreadsheet to bootstrap overrides
-pip install release-planner[import]
-python -m release_planner import-xlsx --xlsx ~/Downloads/planning-3.5.xlsx
+# With debug logging
+python -m release_planner serve --verbose
 ```
 
-## Environment Variables
+Open http://localhost:9000 in your browser. Without a `RELEASE_PLANNER_JIRA_TOKEN`, the dashboard runs in **demo mode** with sample data.
 
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `RELEASE_PLANNER_JIRA_TOKEN` | Yes | -- | PAT for `issues.redhat.com`. Falls back to `JIRA_TOKEN`. |
-| `GOOGLE_CREDENTIALS_FILE` | Yes* | -- | Path to Google service account JSON key file |
-| `GOOGLE_CREDENTIALS_JSON` | Yes* | -- | Inline Google service account JSON (for CI/containers) |
-| `DEFAULT_SPREADSHEET_ID` | No | -- | Default spreadsheet ID when `--spreadsheet-id` is not passed |
-| `JIRA_SERVER` | No | `https://issues.redhat.com` | Jira Server/DC instance URL |
-| `JIRA_QUERY_DELAY` | No | `1.0` | Seconds between Jira API queries |
-| `LOG_LEVEL` | No | `INFO` | Logging verbosity |
-| `CONFIG_DIR` | No | `./config` | Config directory for YAML files |
-| `DATA_DIR` | No | `./data` | Data directory for overrides and field mapping |
+### Dashboard Features
 
-*One of `GOOGLE_CREDENTIALS_FILE` or `GOOGLE_CREDENTIALS_JSON` is required.
+- **Three-tab view:** Big Rocks, Features, and RFEs with item counts in tab labels
+- **Tiered classification:** items grouped into Tier 1 (Milestone Essentials), Tier 2 (Enhancements), and Tier 3 (Collaborative Support) with visual separator rows
+- **Filtering:** by Pillar, Big Rock, Status, Team, Priority, and free-text search
+- **Summary cards:** per-tier counts with release-aware labels
+- **Release selector:** switch between configured releases
+- **Export:** one-click export to Google Sheets
+- **Auto-refresh:** data cached with configurable TTL; manual refresh via header button
 
-## Google Service Account Setup
+### Tier Classification
 
-1. Create or select a Google Cloud project
-2. Enable the **Google Sheets API**
-3. Create a **service account** (APIs & Services > Credentials)
-4. Download the JSON key file
-5. Set `GOOGLE_CREDENTIALS_FILE=/path/to/service-account.json`
-6. Share your target spreadsheet with the service account email (as Editor)
+| Tier | Name | What's Included |
+|------|------|-----------------|
+| **1** | Milestone Essentials | Features and RFEs tied to Big Rock outcomes, filtered by Target Release / candidate label |
+| **2** | Enhancements | Features with a matching Target Release or Fix Version but not tied to a Big Rock; RFEs with a candidate label but no Big Rock |
+| **3** | Collaborative Support | In Progress features with no Target Release or Fix Version set (features only, no RFEs) |
 
-See the design doc (Section 5.5) for detailed instructions.
+Within Tier 1, items are sorted by Big Rock priority, then by issue priority within each rock. Tiers 2 and 3 are sorted by issue priority only.
+
+## Container Deployment
+
+### Local (Podman/Docker)
+
+```bash
+# Build
+podman build -t release-planner:local .
+
+# Run (mount config, pass credentials from .env)
+podman run -d \
+  --name release-planner \
+  -p 9000:9000 \
+  -v ./config:/opt/app-root/config:ro \
+  --env-file .env \
+  -e RELEASE_PLANNER_HOST=0.0.0.0 \
+  release-planner:local
+```
+
+Teammates on the same network can access the dashboard at `http://<your-ip>:9000`.
+
+### OpenShift
+
+Kubernetes manifests are in `k8s/`:
+
+```
+k8s/
+  deployment.yaml
+  service.yaml
+  route.yaml
+  secret.example.yaml
+  configmap-config.yaml
+  configmap-data.yaml
+```
 
 ## CLI Commands
+
+The CLI provides additional workflows beyond the web dashboard.
+
+### `serve`
+
+Start the web server.
+
+```bash
+python -m release_planner serve [--host HOST] [--port PORT] [-v]
+```
 
 ### `generate`
 
@@ -113,33 +130,59 @@ Import an existing `.xlsx` spreadsheet to bootstrap `overrides.yaml`.
 python -m release_planner import-xlsx --xlsx path/to/file.xlsx [-o output.yaml]
 ```
 
-## Outcome-Driven Discovery
+## API Endpoints
 
-Each Big Rock in `big_rocks.yaml` declares one or more Jira Outcome keys (e.g., `RHAISTRAT-9001`). The planner:
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/healthz` | No | Health check |
+| `GET` | `/api/status` | No | Server status and demo mode flag |
+| `GET` | `/api/releases` | Yes* | List configured releases |
+| `GET` | `/api/releases/{version}/candidates` | Yes* | Full candidate data, summary stats, and filter options |
+| `POST` | `/api/releases/{version}/refresh` | Yes* | Clear cache and re-fetch from Jira |
 
-1. Queries `parent = <outcome_key>` for each Outcome to discover all direct children
-2. Classifies children:
-   - **Features** (`RHAISTRAT-*`): included if Target Release contains the release string (e.g., "3.5")
-   - **RFEs** (`RHAIRFE-*`): included if labels contain the exact `3.5-candidate` label
-   - Other prefixes are skipped
-3. Post-filters terminal statuses ("Review", "Pending Release")
-4. Deduplicates: features appearing under multiple Big Rocks get a single row with merged names sorted by priority
+*Auth is only enforced when `RELEASE_PLANNER_API_KEY` is set.
 
-All children are tagged with `source_pass = "outcome"`. The `source` field is derived from the issue key prefix (`RHAIRFE-*` = "rfe", all others = "jira").
+## Environment Variables
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `RELEASE_PLANNER_JIRA_TOKEN` | Yes | -- | Jira API token (falls back to `JIRA_TOKEN`) |
+| `JIRA_SERVER` | No | `https://issues.redhat.com` | Jira instance URL |
+| `JIRA_EMAIL` | No | -- | Email for Jira Cloud basic auth |
+| `RELEASE_PLANNER_HOST` | No | `127.0.0.1` | Server bind address (`0.0.0.0` for containers) |
+| `RELEASE_PLANNER_PORT` | No | `9000` | Server port |
+| `RELEASE_PLANNER_API_KEY` | No | -- | Shared API key; auth disabled if unset |
+| `RELEASE_PLANNER_LOG_FORMAT` | No | `text` | Log format (`text` or `json`) |
+| `GOOGLE_CREDENTIALS_FILE` | CLI only | -- | Path to Google service account JSON key |
+| `GOOGLE_CREDENTIALS_JSON` | CLI only | -- | Inline Google service account JSON |
+| `DEFAULT_SPREADSHEET_ID` | No | -- | Default spreadsheet ID for `generate` |
+| `JIRA_QUERY_DELAY` | No | `1.0` | Seconds between Jira API queries |
+| `CONFIG_DIR` | No | `./config` | Config directory for YAML files |
+| `DATA_DIR` | No | `./data` | Data directory for overrides |
+| `LOG_LEVEL` | No | `INFO` | Logging verbosity |
+
+## How It Works
+
+Each Big Rock in `config/big_rocks.yaml` declares Jira Outcome keys. The pipeline:
+
+1. **Tier 1 discovery:** queries `parent = <outcome_key>` for each Big Rock outcome to find direct children. Features (`RHAISTRAT-*`) are included if Target Release matches; RFEs (`RHAIRFE-*`) if they carry the release candidate label. Terminal statuses (Review, Pending Release) are filtered out. Duplicates across Big Rocks are merged into a single row.
+2. **Tier 2 discovery:** finds Features with a matching Target Release or Fix Version and RFEs with a candidate label that were not discovered in Tier 1.
+3. **Tier 3 discovery:** finds In Progress Features with no Target Release and no Fix Version (features only). A post-filter catches items where the JQL field name differs from the custom field mapping.
+4. **Overrides:** optional YAML overrides can modify or add entries.
+5. **Output:** structured result served via API, rendered in the dashboard, or written to Google Sheets.
 
 ## Development
 
 ```bash
-# Install with dev dependencies
 pip install -e ".[dev]"
 
 # Run tests
-pytest tests/ -v
+pytest
 
-# Run tests with coverage
-pytest tests/ -v --cov=release_planner --cov-report=term-missing
+# Run a single test file
+pytest tests/test_api.py
 
-# Lint
+# Lint and format
 ruff check src/ tests/
 ruff format --check src/ tests/
 ```
@@ -149,18 +192,29 @@ ruff format --check src/ tests/
 ```
 release-planner/
   src/release_planner/
+    api.py              # FastAPI endpoints and static file serving
+    api_models.py       # Pydantic response models for the API
+    auth.py             # API key authentication middleware
+    cache.py            # In-memory cache with TTL
     cli.py              # Click CLI commands
     config.py           # Settings loader, YAML config parser
-    models.py           # Pydantic v2 models
-    jira_client.py      # Jira connection and outcome-driven traversal
-    sheets_writer.py    # Google Sheets writer via gspread
-    overrides.py        # YAML override loader and merger
+    constants.py        # Column enums, URLs, cache TTLs
+    excel_writer.py     # Excel (.xlsx) writer
     importer.py         # .xlsx import for bootstrapping overrides
-    constants.py        # Column enums, style constants
+    jira_client.py      # Jira connection and issue discovery
+    logging_config.py   # Structured logging setup
+    models.py           # Pydantic v2 data models
+    overrides.py        # YAML override loader and merger
+    pipeline.py         # Core data pipeline (fetch, classify, deduplicate)
+    sample_data.py      # Demo mode sample data generator
+    sheets_writer.py    # Google Sheets writer via gspread
+  frontend/
+    index.html          # Dashboard HTML
+    app.js              # Dashboard logic (vanilla JS)
+    style.css           # Dashboard styles
   config/
-    big_rocks.yaml      # 17 Big Rock definitions with outcome_keys
-  data/
-    overrides.yaml      # Manual overrides (gitignored)
+    big_rocks.yaml      # Big Rock definitions with outcome keys
+  k8s/                  # OpenShift/Kubernetes manifests
   tests/
-    ...
+  Dockerfile
 ```
