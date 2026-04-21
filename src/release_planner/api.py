@@ -7,15 +7,13 @@ import glob as glob_module
 import logging
 import os
 import re
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
-from starlette.background import BackgroundTask
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from release_planner import cache
@@ -29,6 +27,7 @@ from release_planner.api_models import (
     RfeRow,
     RockSummary,
     SummaryStats,
+    TierSummary,
 )
 from release_planner.auth import require_auth
 from release_planner.constants import CACHE_TTL_CANDIDATES, CACHE_TTL_RELEASES
@@ -300,25 +299,13 @@ def _build_candidate_response(
         )
 
     # Build summary stats
-    per_pillar: dict[str, PillarSummary] = {}
     per_rock: dict[str, PillarSummary] = {}
-    rock_pillar_map = {r.name: r.pillar for r in result.big_rocks}
 
     for rock in result.big_rocks:
         stats = result.per_rock_stats.get(rock.name, {})
         feat_count = stats.get("features", 0)
         rfe_count = stats.get("rfes", 0)
         per_rock[rock.name] = PillarSummary(features=feat_count, rfes=rfe_count)
-
-        pillar = rock.pillar
-        if pillar:
-            if pillar in per_pillar:
-                per_pillar[pillar] = PillarSummary(
-                    features=per_pillar[pillar].features + feat_count,
-                    rfes=per_pillar[pillar].rfes + rfe_count,
-                )
-            else:
-                per_pillar[pillar] = PillarSummary(features=feat_count, rfes=rfe_count)
 
     rocks_with_data = sum(
         1
@@ -327,12 +314,24 @@ def _build_candidate_response(
         or result.per_rock_stats.get(r.name, {}).get("rfes", 0) > 0
     )
 
+    tier1 = TierSummary(
+        features=result.tier1_features,
+        rfes=result.tier1_rfes,
+        description="Big Rock-associated features and RFEs that PM has identified as essential for this release.",
+    )
+    tier2 = TierSummary(
+        features=result.tier2_features,
+        rfes=result.tier2_rfes,
+        description="Features and RFEs not tied to Big Rocks, but PM believes are important for customers or represent significant usability improvements.",
+    )
+
     summary = SummaryStats(
         total_features=len(feature_rows),
         total_rfes=len(rfe_rows),
         total_big_rocks=len(result.big_rocks),
         rocks_with_data=rocks_with_data,
-        per_pillar=per_pillar,
+        tier1=tier1,
+        tier2=tier2,
         per_rock=per_rock,
     )
 
@@ -513,26 +512,23 @@ async def get_candidates(version: str, _auth: str = Depends(require_auth)):
     return await _get_or_run_pipeline(version)
 
 
-@app.get("/api/releases/{version}/export")
-async def export_excel(version: str, _auth: str = Depends(require_auth)):
-    """Generate and download an Excel file for a release.
+@app.post("/api/releases/{version}/export")
+async def export_sheets(version: str, _auth: str = Depends(require_auth)):
+    """Create a Google Spreadsheet with the release data and return its URL.
 
-    Uses the existing ExcelWriter (same format as CLI --output).
-    Temp file is cleaned up after the response is sent via BackgroundTask (M9).
+    Uses the existing SheetsWriter (same format as CLI --sheets).
+    Requires GOOGLE_CREDENTIALS_FILE or GOOGLE_CREDENTIALS_JSON to be configured.
     """
     _validate_version(version)
-    # Get data (from cache or pipeline)
     response = await _get_or_run_pipeline(version)
 
     if response.demo_mode:
         raise HTTPException(
             status_code=400,
-            detail="Excel export is not available in demo mode. "
+            detail="Google Sheets export is not available in demo mode. "
             "Configure JIRA_TOKEN for live data.",
         )
 
-    # We need the PipelineResult (with candidates dict) for ExcelWriter
-    # Re-run pipeline if needed (the CandidateResponse doesn't have the dict form)
     config_file = _find_config_file_for_version(version)
     if config_file is None:
         raise HTTPException(status_code=404, detail=f"Release {version} not found")
@@ -553,33 +549,41 @@ async def export_excel(version: str, _auth: str = Depends(require_auth)):
             jira_client=jira_client,
         )
     except PipelineError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error("Pipeline error during export: %s", e)
+        raise HTTPException(status_code=500, detail="Pipeline execution failed") from e
 
-    from release_planner.excel_writer import ExcelWriter
-
-    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
-        tmp_path = tmp.name
+    from release_planner.sheets_writer import SheetsWriter
 
     try:
-        writer = ExcelWriter(
+        credentials = SheetsWriter.load_credentials()
+    except RuntimeError as e:
+        logger.error("Google credentials not configured: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Google Sheets credentials are not configured. "
+            "Set GOOGLE_CREDENTIALS_FILE or GOOGLE_CREDENTIALS_JSON.",
+        ) from e
+
+    title = f"RHOAI {version} Release Candidates"
+
+    try:
+        writer = SheetsWriter(
             big_rocks=result.big_rocks,
             candidates=result.candidates,
             release=result.release,
-            fix_versions=result.fix_versions,
+            credentials=credentials,
             per_rock_stats=result.per_rock_stats,
             outcome_summaries=result.outcome_summaries,
         )
-        writer.write(tmp_path)
-    except Exception:
-        os.unlink(tmp_path)
-        raise
+        url = await asyncio.to_thread(writer.create_and_write, title)
+    except Exception as e:
+        logger.error("Google Sheets export failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create Google Spreadsheet",
+        ) from e
 
-    return FileResponse(
-        tmp_path,
-        filename=f"rhoai-{version}-candidates.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        background=BackgroundTask(os.unlink, tmp_path),
-    )
+    return {"url": url}
 
 
 @app.post("/api/releases/{version}/refresh", response_model=CandidateResponse)

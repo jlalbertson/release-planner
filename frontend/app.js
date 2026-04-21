@@ -210,10 +210,10 @@ function filterFeatures() {
   var pillarRocks = getRocksForPillar(filters.pillar);
 
   return currentData.features.filter(function (feat) {
-    if (pillarRocks && pillarRocks.indexOf(feat.big_rock) < 0 &&
-        pillarRocks.indexOf(feat.big_rock.split(", ")[0]) < 0) return false;
-    if (filters.rock && feat.big_rock !== filters.rock &&
-        feat.big_rock.split(", ")[0] !== filters.rock) return false;
+    if (pillarRocks && (!feat.big_rock || (pillarRocks.indexOf(feat.big_rock) < 0 &&
+        pillarRocks.indexOf(feat.big_rock.split(", ")[0]) < 0))) return false;
+    if (filters.rock && (!feat.big_rock || (feat.big_rock !== filters.rock &&
+        feat.big_rock.split(", ")[0] !== filters.rock))) return false;
     if (filters.status && feat.status !== filters.status) return false;
     if (filters.team && feat.components.indexOf(filters.team) < 0) return false;
     if (filters.priority && feat.priority !== filters.priority) return false;
@@ -228,10 +228,10 @@ function filterRfes() {
   var pillarRocks = getRocksForPillar(filters.pillar);
 
   return currentData.rfes.filter(function (rfe) {
-    if (pillarRocks && pillarRocks.indexOf(rfe.big_rock) < 0 &&
-        pillarRocks.indexOf(rfe.big_rock.split(", ")[0]) < 0) return false;
-    if (filters.rock && rfe.big_rock !== filters.rock &&
-        rfe.big_rock.split(", ")[0] !== filters.rock) return false;
+    if (pillarRocks && (!rfe.big_rock || (pillarRocks.indexOf(rfe.big_rock) < 0 &&
+        pillarRocks.indexOf(rfe.big_rock.split(", ")[0]) < 0))) return false;
+    if (filters.rock && (!rfe.big_rock || (rfe.big_rock !== filters.rock &&
+        rfe.big_rock.split(", ")[0] !== filters.rock))) return false;
     if (filters.status && rfe.status !== filters.status) return false;
     if (filters.priority && rfe.priority !== filters.priority) return false;
     if (!matchesSearch(rfe, filters.search)) return false;
@@ -247,46 +247,53 @@ function renderSummaryCards(filteredFeatures, filteredRfes, filteredRocks) {
 
   if (!currentData) return;
 
-  // Per-pillar cards
-  var pillarMap = {};
-  for (var i = 0; i < filteredRocks.length; i++) {
-    var rock = filteredRocks[i];
-    if (!rock.pillar) continue;
-    if (!pillarMap[rock.pillar]) {
-      pillarMap[rock.pillar] = { features: 0, rfes: 0 };
-    }
-  }
-
+  // Count Tier 1 vs Tier 2 in filtered results
+  var tier1Features = 0;
+  var tier2Features = 0;
   for (var j = 0; j < filteredFeatures.length; j++) {
-    var feat = filteredFeatures[j];
-    var rockName = feat.big_rock.split(", ")[0];
-    var rockObj = currentData.big_rocks.find(function (r) { return r.name === rockName; });
-    if (rockObj && rockObj.pillar && pillarMap[rockObj.pillar] !== undefined) {
-      pillarMap[rockObj.pillar].features++;
+    if (filteredFeatures[j].big_rock) {
+      tier1Features++;
+    } else {
+      tier2Features++;
     }
   }
 
+  var tier1Rfes = 0;
+  var tier2Rfes = 0;
   for (var k = 0; k < filteredRfes.length; k++) {
-    var rfe = filteredRfes[k];
-    var rn = rfe.big_rock.split(", ")[0];
-    var ro = currentData.big_rocks.find(function (r) { return r.name === rn; });
-    if (ro && ro.pillar && pillarMap[ro.pillar] !== undefined) {
-      pillarMap[ro.pillar].rfes++;
+    if (filteredRfes[k].big_rock) {
+      tier1Rfes++;
+    } else {
+      tier2Rfes++;
     }
   }
 
-  var pillars = Object.keys(pillarMap).sort();
-  for (var p = 0; p < pillars.length; p++) {
-    var pillar = pillars[p];
-    var stats = pillarMap[pillar];
-    var card = document.createElement("div");
-    card.className = "summary-card";
-    card.innerHTML =
-      '<div class="card-title">' + escapeHtml(pillar) + '</div>' +
-      '<div class="card-stat">' + stats.features + ' <span>features</span></div>' +
-      '<div class="card-stat">' + stats.rfes + ' <span>RFEs</span></div>';
-    container.appendChild(card);
-  }
+  var tier1Desc = currentData.summary.tier1
+    ? currentData.summary.tier1.description
+    : "Big Rock-associated features and RFEs essential for this release.";
+  var tier2Desc = currentData.summary.tier2
+    ? currentData.summary.tier2.description
+    : "Features and RFEs not tied to Big Rocks but important for customers.";
+
+  // Tier 1 card
+  var tier1Card = document.createElement("div");
+  tier1Card.className = "summary-card";
+  tier1Card.innerHTML =
+    '<div class="card-title">Tier 1</div>' +
+    '<div class="card-desc">' + escapeHtml(tier1Desc) + '</div>' +
+    '<div class="card-stat">' + tier1Features + ' <span>features</span></div>' +
+    '<div class="card-stat">' + tier1Rfes + ' <span>RFEs</span></div>';
+  container.appendChild(tier1Card);
+
+  // Tier 2 card
+  var tier2Card = document.createElement("div");
+  tier2Card.className = "summary-card";
+  tier2Card.innerHTML =
+    '<div class="card-title">Tier 2</div>' +
+    '<div class="card-desc">' + escapeHtml(tier2Desc) + '</div>' +
+    '<div class="card-stat">' + tier2Features + ' <span>features</span></div>' +
+    '<div class="card-stat">' + tier2Rfes + ' <span>RFEs</span></div>';
+  container.appendChild(tier2Card);
 
   // Total card
   var totalCard = document.createElement("div");
@@ -492,41 +499,27 @@ function setupTabs() {
   }
 }
 
-// ---- Excel export ----
+// ---- Google Sheets export ----
 
-function exportExcel() {
+function exportToSheets() {
   if (!currentVersion) return;
-  var url = API_BASE + "/releases/" + currentVersion + "/export";
-  var key = getApiKey();
+  var btn = document.getElementById("export-btn");
+  btn.disabled = true;
+  btn.textContent = "Creating spreadsheet...";
 
-  // Use XMLHttpRequest for download with auth header
-  var xhr = new XMLHttpRequest();
-  xhr.open("GET", url, true);
-  xhr.responseType = "blob";
-  if (key) {
-    xhr.setRequestHeader("Authorization", "Bearer " + key);
-  }
-
-  xhr.onload = function () {
-    if (xhr.status === 200) {
-      var blob = xhr.response;
-      var link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = "rhoai-" + currentVersion + "-candidates.xlsx";
-      link.click();
-      window.URL.revokeObjectURL(link.href);
-    } else if (xhr.status === 401) {
-      showLogin();
-    } else {
-      console.error("Export failed:", xhr.status, xhr.statusText);
-    }
-  };
-
-  xhr.onerror = function () {
-    console.error("Export request failed");
-  };
-
-  xhr.send();
+  fetchJSON(API_BASE + "/releases/" + currentVersion + "/export", { method: "POST" })
+    .then(function (data) {
+      btn.disabled = false;
+      btn.textContent = "Export to Google Sheets";
+      if (data && data.url) {
+        window.open(data.url, "_blank");
+      }
+    })
+    .catch(function (err) {
+      btn.disabled = false;
+      btn.textContent = "Export to Google Sheets";
+      console.error("Export failed:", err);
+    });
 }
 
 // ---- Refresh ----
@@ -599,7 +592,7 @@ async function init() {
   document.getElementById("clear-filters").addEventListener("click", clearFilters);
 
   // Export
-  document.getElementById("export-btn").addEventListener("click", exportExcel);
+  document.getElementById("export-btn").addEventListener("click", exportToSheets);
 
   // Refresh
   document.getElementById("refresh-btn").addEventListener("click", refreshData);

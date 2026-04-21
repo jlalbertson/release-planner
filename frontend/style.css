@@ -201,6 +201,13 @@ main {
   margin-bottom: 8px;
 }
 
+.summary-card .card-desc {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
 .summary-card .card-stat {
   font-size: 14px;
   font-weight: 500;

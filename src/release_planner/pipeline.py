@@ -46,12 +46,18 @@ class PipelineResult:
     features: list[Candidate]  # RHAISTRAT only, deduplicated, sorted
     rfes: list[Candidate]  # RHAIRFE only, deduplicated, sorted
 
+    # Tier counts
+    tier1_features: int = 0
+    tier1_rfes: int = 0
+    tier2_features: int = 0
+    tier2_rfes: int = 0
+
     # Stats and metadata
-    per_rock_stats: dict[str, dict[str, int]]
-    outcome_summaries: dict[str, str]
-    release: str
-    skipped_count: int
-    terminal_filtered_count: int
+    per_rock_stats: dict[str, dict[str, int]] = field(default_factory=dict)
+    outcome_summaries: dict[str, str] = field(default_factory=dict)
+    release: str = ""
+    skipped_count: int = 0
+    terminal_filtered_count: int = 0
     rocks_without_outcomes: list[BigRock] = field(default_factory=list)
 
 
@@ -187,6 +193,15 @@ def run_pipeline(
                     rock_child_count += 1
 
                 elif key.startswith("RHAIRFE-"):
+                    # Approved RFEs have a cloned RHAISTRAT Feature, so skip
+                    if child.status == "Approved":
+                        skipped_count += 1
+                        logger.debug(
+                            "Skipping RFE %s: Approved (cloned Feature expected)",
+                            key,
+                        )
+                        continue
+
                     # RFE: check for release-candidate label
                     # Split labels and check individual values to avoid
                     # substring false-positives
@@ -329,12 +344,50 @@ def run_pipeline(
             else:
                 final_features.append(c)
 
+    tier1_feature_count = len(final_features)
+    tier1_rfe_count = len(final_rfes)
+
+    # --- Phase C: Tier 2 discovery ---
+    tier1_feature_keys = {c.issue_key for c in final_features}
+    tier1_rfe_keys = {c.issue_key for c in final_rfes}
+
+    tier2_features = jira_client.fetch_tier2_features(release, tier1_feature_keys)
+    tier2_rfes = jira_client.fetch_tier2_rfes(release, tier1_rfe_keys)
+
+    # Post-filter terminal statuses on Tier 2 features
+    filtered_t2_features: list[Candidate] = []
+    for c in tier2_features:
+        if c.status in _TERMINAL_STATUSES:
+            terminal_filtered_count += 1
+            logger.debug("Skipping Tier 2 %s: terminal status '%s'", c.issue_key, c.status)
+            continue
+        filtered_t2_features.append(c)
+
+    logger.info(
+        "Tier 2: %d features, %d RFEs",
+        len(filtered_t2_features),
+        len(tier2_rfes),
+    )
+
+    # Append Tier 2 after Tier 1 in flat lists
+    final_features.extend(filtered_t2_features)
+    final_rfes.extend(tier2_rfes)
+
+    # Add Tier 2 to candidates dict under empty-string key for writer compatibility
+    tier2_all = filtered_t2_features + tier2_rfes
+    if tier2_all:
+        all_candidates[""] = tier2_all
+
     return PipelineResult(
         candidates=all_candidates,
         big_rocks=active_rocks,
         fix_versions=derived_fix_versions,
         features=final_features,
         rfes=final_rfes,
+        tier1_features=tier1_feature_count,
+        tier1_rfes=tier1_rfe_count,
+        tier2_features=len(filtered_t2_features),
+        tier2_rfes=len(tier2_rfes),
         per_rock_stats=per_rock_stats,
         outcome_summaries=outcome_summaries,
         release=release,

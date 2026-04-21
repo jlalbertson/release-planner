@@ -150,6 +150,9 @@ class SheetsWriter:
         for rock in self._big_rocks:
             for candidate in self._features.get(rock.name, []):
                 rows.append(self._feature_to_row(candidate))
+        # Tier 2 features (no Big Rock association)
+        for candidate in self._features.get("", []):
+            rows.append(self._feature_to_row(candidate))
 
         if rows:
             worksheet.clear()
@@ -167,6 +170,9 @@ class SheetsWriter:
         for rock in self._big_rocks:
             for candidate in self._rfes.get(rock.name, []):
                 rows.append(self._rfe_to_row(candidate))
+        # Tier 2 RFEs (no Big Rock association)
+        for candidate in self._rfes.get("", []):
+            rows.append(self._rfe_to_row(candidate))
 
         if rows:
             worksheet.clear()
@@ -239,7 +245,7 @@ class SheetsWriter:
         if features_ws_id is not None:
             total_features = sum(
                 len(self._features.get(r.name, [])) for r in self._big_rocks
-            )
+            ) + len(self._features.get("", []))
             requests.extend(
                 self._worksheet_formatting_requests(
                     ws_id=features_ws_id,
@@ -255,7 +261,7 @@ class SheetsWriter:
         if rfes_ws_id is not None:
             total_rfes = sum(
                 len(self._rfes.get(r.name, [])) for r in self._big_rocks
-            )
+            ) + len(self._rfes.get("", []))
             requests.extend(
                 self._worksheet_formatting_requests(
                     ws_id=rfes_ws_id,

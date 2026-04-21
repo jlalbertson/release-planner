@@ -17,6 +17,7 @@ from release_planner.api_models import (
     RfeRow,
     RockSummary,
     SummaryStats,
+    TierSummary,
 )
 
 
@@ -201,7 +202,8 @@ class TestCandidateResponse:
                 total_rfes=1,
                 total_big_rocks=1,
                 rocks_with_data=1,
-                per_pillar={"Inference": PillarSummary(features=2, rfes=1)},
+                tier1=TierSummary(features=2, rfes=1, description="Tier 1"),
+                tier2=TierSummary(features=0, rfes=0, description="Tier 2"),
                 per_rock={"MaaS": PillarSummary(features=2, rfes=1)},
             ),
             big_rocks=[
@@ -320,7 +322,8 @@ class TestSummaryStats:
             total_rfes=18,
             total_big_rocks=14,
             rocks_with_data=10,
-            per_pillar={},
+            tier1=TierSummary(features=30, rfes=12, description="Tier 1"),
+            tier2=TierSummary(features=12, rfes=6, description="Tier 2"),
             per_rock={},
         )
         assert stats.total_features == 42
@@ -332,11 +335,13 @@ class TestSummaryStats:
             total_rfes=5,
             total_big_rocks=3,
             rocks_with_data=2,
-            per_pillar={"Inference": PillarSummary(features=5, rfes=3)},
+            tier1=TierSummary(features=7, rfes=3, description="Tier 1"),
+            tier2=TierSummary(features=3, rfes=2, description="Tier 2"),
             per_rock={"MaaS": PillarSummary(features=5, rfes=3)},
         )
         data = stats.model_dump()
-        assert data["per_pillar"]["Inference"]["features"] == 5
+        assert data["tier1"]["features"] == 7
+        assert data["tier2"]["features"] == 3
         assert data["per_rock"]["MaaS"]["rfes"] == 3
 
 

@@ -552,6 +552,97 @@ class JiraClient:
 
         return summaries
 
+    def fetch_tier2_features(
+        self,
+        release: str,
+        exclude_keys: set[str],
+    ) -> list[Candidate]:
+        """Fetch Tier 2 features: RHAISTRAT with matching Target Release but not in Tier 1.
+
+        JQL: project = RHAISTRAT AND type = Feature
+             AND "Target Release" ~ "*{release}*"
+             AND status NOT IN (closed statuses)
+
+        Args:
+            release: Release version string (e.g. "3.5").
+            exclude_keys: Set of issue keys already discovered as Tier 1.
+
+        Returns:
+            List of Candidate models with empty big_rock.
+        """
+        closed_list = ", ".join(f'"{s}"' for s in self._CLOSED_STATUSES)
+        jql = (
+            f'project = RHAISTRAT AND type = Feature '
+            f'AND "Target Release" ~ "*{release}*" '
+            f"AND status NOT IN ({closed_list}) "
+            f"ORDER BY key ASC"
+        )
+
+        logger.info("Fetching Tier 2 features for release %s", release)
+
+        try:
+            raw_issues = self.search_issues(jql)
+        except RuntimeError as e:
+            logger.error("Failed to fetch Tier 2 features: %s", e)
+            return []
+
+        candidates = []
+        for issue in raw_issues:
+            if issue.key in exclude_keys:
+                continue
+            candidate = self.map_to_candidate(issue, big_rock_name="", source_pass="tier2")
+            candidates.append(candidate)
+
+        logger.info("Found %d Tier 2 features for release %s", len(candidates), release)
+        return candidates
+
+    def fetch_tier2_rfes(
+        self,
+        release: str,
+        exclude_keys: set[str],
+    ) -> list[Candidate]:
+        """Fetch Tier 2 RFEs: RHAIRFE with candidate label but not in Tier 1.
+
+        JQL: project = RHAIRFE AND labels = "{release}-candidate"
+             AND status NOT IN (closed statuses)
+             AND status != "Approved"
+
+        Approved RFEs are excluded because approval means a RHAISTRAT Feature
+        has been cloned from the RFE and should appear in the Features list.
+
+        Args:
+            release: Release version string (e.g. "3.5").
+            exclude_keys: Set of RFE keys already discovered as Tier 1.
+
+        Returns:
+            List of Candidate models with empty big_rock.
+        """
+        closed_list = ", ".join(f'"{s}"' for s in self._CLOSED_STATUSES)
+        jql = (
+            f'project = RHAIRFE AND labels = "{release}-candidate" '
+            f"AND status NOT IN ({closed_list}) "
+            f'AND status != "Approved" '
+            f"ORDER BY key ASC"
+        )
+
+        logger.info("Fetching Tier 2 RFEs for release %s", release)
+
+        try:
+            raw_issues = self.search_issues(jql)
+        except RuntimeError as e:
+            logger.error("Failed to fetch Tier 2 RFEs: %s", e)
+            return []
+
+        candidates = []
+        for issue in raw_issues:
+            if issue.key in exclude_keys:
+                continue
+            candidate = self.map_to_candidate(issue, big_rock_name="", source_pass="tier2")
+            candidates.append(candidate)
+
+        logger.info("Found %d Tier 2 RFEs for release %s", len(candidates), release)
+        return candidates
+
     @staticmethod
     def _get_parent_rfe_key(issue: Any) -> str:
         """Find linked RHAIRFE key for a RHAISTRAT via Clones link or description.

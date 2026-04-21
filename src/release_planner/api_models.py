@@ -95,6 +95,14 @@ class PillarSummary(BaseModel):
     rfes: int
 
 
+class TierSummary(BaseModel):
+    """Feature and RFE counts for a tier."""
+
+    features: int
+    rfes: int
+    description: str
+
+
 class SummaryStats(BaseModel):
     """Aggregated statistics for the summary cards."""
 
@@ -102,7 +110,8 @@ class SummaryStats(BaseModel):
     total_rfes: int
     total_big_rocks: int
     rocks_with_data: int
-    per_pillar: dict[str, PillarSummary]
+    tier1: TierSummary
+    tier2: TierSummary
     per_rock: dict[str, PillarSummary]
 
 

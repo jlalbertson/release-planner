@@ -17,6 +17,7 @@ from release_planner.api_models import (
     RfeRow,
     RockSummary,
     SummaryStats,
+    TierSummary,
 )
 from release_planner.constants import JIRA_BROWSE_URL
 
@@ -376,6 +377,77 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
 ]
 
+_SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
+    FeatureRow(
+        big_rock="",
+        issue_key="RHAISTRAT-1800",
+        status="In Progress",
+        priority="Major",
+        phase="EA1",
+        summary="Notebook image lifecycle management",
+        components="Platform",
+        target_release="rhoai-3.5",
+        fix_version="rhoai-3.5",
+        pm="Tina Nguyen",
+        delivery_owner="Paul Adams",
+        rfe="",
+        labels="3.5-candidate",
+    ),
+    FeatureRow(
+        big_rock="",
+        issue_key="RHAISTRAT-1801",
+        status="Refinement",
+        priority="Normal",
+        phase="GA",
+        summary="Dashboard usability improvements",
+        components="Dashboard",
+        target_release="rhoai-3.5",
+        fix_version="",
+        pm="Tina Nguyen",
+        delivery_owner="",
+        rfe="RHAIRFE-850",
+        labels="",
+    ),
+    FeatureRow(
+        big_rock="",
+        issue_key="RHAISTRAT-1802",
+        status="New",
+        priority="Major",
+        phase="",
+        summary="Improved RBAC for data science projects",
+        components="Platform, Auth",
+        target_release="rhoai-3.5",
+        fix_version="",
+        pm="Oscar Park",
+        delivery_owner="",
+        rfe="RHAIRFE-851",
+        labels="",
+    ),
+]
+
+_SAMPLE_TIER2_RFES: list[RfeRow] = [
+    RfeRow(
+        big_rock="",
+        issue_key="RHAIRFE-850",
+        status="Stakeholder review",
+        priority="Normal",
+        summary="Dashboard UX refresh for data scientists",
+        components="Dashboard",
+        pm="Tina Nguyen",
+        labels="3.5-candidate",
+    ),
+    RfeRow(
+        big_rock="",
+        issue_key="RHAIRFE-851",
+        status="New",
+        priority="Major",
+        summary="Fine-grained RBAC for multi-tenant DS projects",
+        components="Platform, Auth",
+        pm="Oscar Park",
+        labels="3.5-candidate",
+    ),
+]
+
 _SAMPLE_RFES: list[RfeRow] = [
     RfeRow(
         big_rock="MaaS",
@@ -469,37 +541,46 @@ def get_sample_response(version: str = "3.5") -> CandidateResponse:
     Returns:
         CandidateResponse with representative sample data.
     """
-    features = _SAMPLE_FEATURES
-    rfes = _SAMPLE_RFES
+    tier1_features = _SAMPLE_FEATURES
+    tier2_features = _SAMPLE_TIER2_FEATURES
+    features = tier1_features + tier2_features
+    tier1_rfes = _SAMPLE_RFES
+    tier2_rfes = _SAMPLE_TIER2_RFES
+    rfes = tier1_rfes + tier2_rfes
     big_rocks = _SAMPLE_BIG_ROCKS
 
     # Compute summary stats
-    per_pillar: dict[str, PillarSummary] = {}
     per_rock: dict[str, PillarSummary] = {}
-    rock_pillar_map = {r.name: r.pillar for r in big_rocks}
 
     for rock in big_rocks:
-        rock_features = sum(1 for f in features if f.big_rock == rock.name)
-        rock_rfes = sum(1 for r in rfes if r.big_rock == rock.name)
+        rock_features = sum(1 for f in tier1_features if f.big_rock == rock.name)
+        rock_rfes = sum(1 for r in tier1_rfes if r.big_rock == rock.name)
         per_rock[rock.name] = PillarSummary(features=rock_features, rfes=rock_rfes)
 
-        pillar = rock.pillar
-        if pillar in per_pillar:
-            per_pillar[pillar] = PillarSummary(
-                features=per_pillar[pillar].features + rock_features,
-                rfes=per_pillar[pillar].rfes + rock_rfes,
-            )
-        else:
-            per_pillar[pillar] = PillarSummary(features=rock_features, rfes=rock_rfes)
+    rocks_with_data = sum(
+        1 for r in big_rocks
+        if per_rock.get(r.name, PillarSummary(features=0, rfes=0)).features > 0
+        or per_rock.get(r.name, PillarSummary(features=0, rfes=0)).rfes > 0
+    )
 
-    rocks_with_data = sum(1 for r in big_rocks if per_rock.get(r.name, PillarSummary(features=0, rfes=0)).features > 0 or per_rock.get(r.name, PillarSummary(features=0, rfes=0)).rfes > 0)
+    tier1 = TierSummary(
+        features=len(tier1_features),
+        rfes=len(tier1_rfes),
+        description="Big Rock-associated features and RFEs that PM has identified as essential for this release.",
+    )
+    tier2 = TierSummary(
+        features=len(tier2_features),
+        rfes=len(tier2_rfes),
+        description="Features and RFEs not tied to Big Rocks, but PM believes are important for customers or represent significant usability improvements.",
+    )
 
     summary = SummaryStats(
         total_features=len(features),
         total_rfes=len(rfes),
         total_big_rocks=len(big_rocks),
         rocks_with_data=rocks_with_data,
-        per_pillar=per_pillar,
+        tier1=tier1,
+        tier2=tier2,
         per_rock=per_rock,
     )
 

@@ -128,7 +128,8 @@ class TestCandidatesEndpoint:
         assert "total_rfes" in summary
         assert "total_big_rocks" in summary
         assert "rocks_with_data" in summary
-        assert "per_pillar" in summary
+        assert "tier1" in summary
+        assert "tier2" in summary
         assert "per_rock" in summary
 
     def test_candidates_filter_options(self, client):
