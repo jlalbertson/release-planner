@@ -485,7 +485,7 @@ class JiraClient:
                   ORDER BY key ASC
 
         Args:
-            outcome_key: Jira issue key of the Outcome (e.g. RHAISTRAT-9001).
+            outcome_key: Jira issue key of the Outcome (e.g. RHAISTRAT-1234).
             big_rock_name: Name of the BigRock this Outcome belongs to.
 
         Returns:
@@ -526,7 +526,7 @@ class JiraClient:
         """Fetch the summary (title) for a batch of Outcome issues.
 
         Args:
-            outcome_keys: List of Jira issue keys (e.g. ["RHAISTRAT-9001"]).
+            outcome_keys: List of Jira issue keys (e.g. ["RHAISTRAT-1234"]).
 
         Returns:
             Dict mapping outcome_key -> summary string.

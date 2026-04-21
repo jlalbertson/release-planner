@@ -29,8 +29,8 @@ _SAMPLE_BIG_ROCKS: list[RockSummary] = [
         pillar="Inference",
         state="continue from 3.4",
         owner="Pat Johnson",
-        outcome_keys=["RHAISTRAT-9001"],
-        outcome_descriptions={"RHAISTRAT-9001": "Model as a Service enablement"},
+        outcome_keys=["RHAISTRAT-1001"],
+        outcome_descriptions={"RHAISTRAT-1001": "Model as a Service enablement"},
         feature_count=5,
         rfe_count=2,
         notes="",
@@ -42,8 +42,8 @@ _SAMPLE_BIG_ROCKS: list[RockSummary] = [
         pillar="Agents",
         state="continue from 3.4",
         owner="Morgan Lee",
-        outcome_keys=["RHAISTRAT-9002"],
-        outcome_descriptions={"RHAISTRAT-9002": "GenAI Studio for enterprise AI workflows"},
+        outcome_keys=["RHAISTRAT-1002"],
+        outcome_descriptions={"RHAISTRAT-1002": "GenAI Studio for enterprise AI workflows"},
         feature_count=4,
         rfe_count=1,
         notes="",
@@ -55,8 +55,8 @@ _SAMPLE_BIG_ROCKS: list[RockSummary] = [
         pillar="Inference",
         state="continue from 3.4",
         owner="Alex Rivera",
-        outcome_keys=["RHAISTRAT-9003"],
-        outcome_descriptions={"RHAISTRAT-9003": "llm-d inference gateway"},
+        outcome_keys=["RHAISTRAT-1003"],
+        outcome_descriptions={"RHAISTRAT-1003": "llm-d inference gateway"},
         feature_count=3,
         rfe_count=1,
         notes="",
@@ -68,8 +68,8 @@ _SAMPLE_BIG_ROCKS: list[RockSummary] = [
         pillar="Data",
         state="continue from 3.4",
         owner="Jordan Taylor",
-        outcome_keys=["RHAISTRAT-9006"],
-        outcome_descriptions={"RHAISTRAT-9006": "Model evaluation hub"},
+        outcome_keys=["RHAISTRAT-1004"],
+        outcome_descriptions={"RHAISTRAT-1004": "Model evaluation hub"},
         feature_count=3,
         rfe_count=2,
         notes="",
@@ -81,8 +81,8 @@ _SAMPLE_BIG_ROCKS: list[RockSummary] = [
         pillar="Platform",
         state="continue from 3.4",
         owner="Casey Martin",
-        outcome_keys=["RHAISTRAT-9007"],
-        outcome_descriptions={"RHAISTRAT-9007": "AI Hub and MCP catalog"},
+        outcome_keys=["RHAISTRAT-1005"],
+        outcome_descriptions={"RHAISTRAT-1005": "AI Hub and MCP catalog"},
         feature_count=4,
         rfe_count=2,
         notes="",
@@ -92,7 +92,7 @@ _SAMPLE_BIG_ROCKS: list[RockSummary] = [
 _SAMPLE_FEATURES: list[FeatureRow] = [
     FeatureRow(
         big_rock="MaaS",
-        issue_key="RHAISTRAT-1520",
+        issue_key="RHAISTRAT-2001",
         status="In Progress",
         priority="Major",
         phase="EA1",
@@ -107,7 +107,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="MaaS",
-        issue_key="RHAISTRAT-1521",
+        issue_key="RHAISTRAT-2002",
         status="Refinement",
         priority="Critical",
         phase="EA2",
@@ -122,7 +122,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="MaaS",
-        issue_key="RHAISTRAT-1522",
+        issue_key="RHAISTRAT-2003",
         status="New",
         priority="Major",
         phase="GA",
@@ -137,7 +137,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="MaaS",
-        issue_key="RHAISTRAT-1523",
+        issue_key="RHAISTRAT-2004",
         status="In Progress",
         priority="Major",
         phase="EA1",
@@ -152,7 +152,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="MaaS",
-        issue_key="RHAISTRAT-1524",
+        issue_key="RHAISTRAT-2005",
         status="New",
         priority="Normal",
         phase="",
@@ -167,7 +167,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="Gen AI Studio",
-        issue_key="RHAISTRAT-1400",
+        issue_key="RHAISTRAT-2006",
         status="In Progress",
         priority="Critical",
         phase="EA1",
@@ -182,7 +182,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="Gen AI Studio",
-        issue_key="RHAISTRAT-1401",
+        issue_key="RHAISTRAT-2007",
         status="Refinement",
         priority="Major",
         phase="EA2",
@@ -197,7 +197,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="Gen AI Studio",
-        issue_key="RHAISTRAT-1402",
+        issue_key="RHAISTRAT-2008",
         status="New",
         priority="Major",
         phase="GA",
@@ -212,7 +212,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="Gen AI Studio",
-        issue_key="RHAISTRAT-9004",
+        issue_key="RHAISTRAT-2009",
         status="In Progress",
         priority="Normal",
         phase="EA1",
@@ -227,7 +227,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="llm-d / xKS",
-        issue_key="RHAISTRAT-1550",
+        issue_key="RHAISTRAT-2010",
         status="In Progress",
         priority="Critical",
         phase="EA1",
@@ -242,7 +242,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="llm-d / xKS",
-        issue_key="RHAISTRAT-1551",
+        issue_key="RHAISTRAT-2011",
         status="New",
         priority="Major",
         phase="EA2",
@@ -257,7 +257,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="llm-d / xKS",
-        issue_key="RHAISTRAT-1552",
+        issue_key="RHAISTRAT-2012",
         status="Refinement",
         priority="Normal",
         phase="",
@@ -272,7 +272,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="Eval Hub",
-        issue_key="RHAISTRAT-1600",
+        issue_key="RHAISTRAT-2013",
         status="In Progress",
         priority="Major",
         phase="EA1",
@@ -287,7 +287,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="Eval Hub",
-        issue_key="RHAISTRAT-1601",
+        issue_key="RHAISTRAT-2014",
         status="New",
         priority="Normal",
         phase="EA2",
@@ -302,7 +302,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="Eval Hub",
-        issue_key="RHAISTRAT-1602",
+        issue_key="RHAISTRAT-2015",
         status="Refinement",
         priority="Major",
         phase="GA",
@@ -317,7 +317,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="AI Hub incl MCP",
-        issue_key="RHAISTRAT-1700",
+        issue_key="RHAISTRAT-2016",
         status="In Progress",
         priority="Critical",
         phase="EA1",
@@ -332,7 +332,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="AI Hub incl MCP",
-        issue_key="RHAISTRAT-1701",
+        issue_key="RHAISTRAT-2017",
         status="Refinement",
         priority="Major",
         phase="EA2",
@@ -347,7 +347,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="AI Hub incl MCP",
-        issue_key="RHAISTRAT-1702",
+        issue_key="RHAISTRAT-2018",
         status="New",
         priority="Normal",
         phase="",
@@ -362,7 +362,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="AI Hub incl MCP",
-        issue_key="RHAISTRAT-1703",
+        issue_key="RHAISTRAT-2019",
         status="In Progress",
         priority="Major",
         phase="EA1",
@@ -380,7 +380,7 @@ _SAMPLE_FEATURES: list[FeatureRow] = [
 _SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
     FeatureRow(
         big_rock="",
-        issue_key="RHAISTRAT-1800",
+        issue_key="RHAISTRAT-2020",
         status="In Progress",
         priority="Major",
         phase="EA1",
@@ -396,7 +396,7 @@ _SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="",
-        issue_key="RHAISTRAT-1801",
+        issue_key="RHAISTRAT-2021",
         status="Refinement",
         priority="Normal",
         phase="GA",
@@ -412,7 +412,7 @@ _SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="",
-        issue_key="RHAISTRAT-1802",
+        issue_key="RHAISTRAT-2022",
         status="New",
         priority="Major",
         phase="",
@@ -431,7 +431,7 @@ _SAMPLE_TIER2_FEATURES: list[FeatureRow] = [
 _SAMPLE_TIER3_FEATURES: list[FeatureRow] = [
     FeatureRow(
         big_rock="",
-        issue_key="RHAISTRAT-1900",
+        issue_key="RHAISTRAT-2023",
         status="In Progress",
         priority="Critical",
         phase="",
@@ -447,7 +447,7 @@ _SAMPLE_TIER3_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="",
-        issue_key="RHAISTRAT-1901",
+        issue_key="RHAISTRAT-2024",
         status="In Progress",
         priority="Major",
         phase="",
@@ -463,7 +463,7 @@ _SAMPLE_TIER3_FEATURES: list[FeatureRow] = [
     ),
     FeatureRow(
         big_rock="",
-        issue_key="RHAISTRAT-1902",
+        issue_key="RHAISTRAT-2025",
         status="In Progress",
         priority="Normal",
         phase="",

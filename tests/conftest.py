@@ -34,7 +34,7 @@ def sample_big_rock() -> BigRock:
         pillar="Inference",
         state="continue from 3.4",
         outcome_keys=["RHAISTRAT-9001"],
-        outcome_url="https://redhat.atlassian.net/browse/RHAISTRAT-9001",
+        outcome_url="https://jira.example.com/browse/RHAISTRAT-9001",
     )
 
 

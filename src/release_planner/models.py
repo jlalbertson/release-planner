@@ -18,7 +18,7 @@ class BigRock(BaseModel):
     full_name: str = Field(description="Full name with context")
     outcome_keys: list[str] = Field(
         default_factory=list,
-        description="Jira Outcome issue keys (e.g. RHAISTRAT-9001). "
+        description="Jira Outcome issue keys (e.g. RHAISTRAT-1234). "
         "Children are discovered via parent = <key>. "
         "Empty list = rock is skipped with a WARNING.",
     )

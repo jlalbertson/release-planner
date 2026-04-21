@@ -27,7 +27,7 @@ class TestFeatureRow:
     def test_create_feature_row(self):
         row = FeatureRow(
             big_rock="MaaS",
-            issue_key="RHAISTRAT-1520",
+            issue_key="RHAISTRAT-2001",
             status="In Progress",
             priority="Major",
             phase="EA1",
@@ -41,12 +41,12 @@ class TestFeatureRow:
             labels="3.5-candidate",
         )
         assert row.big_rock == "MaaS"
-        assert row.issue_key == "RHAISTRAT-1520"
+        assert row.issue_key == "RHAISTRAT-2001"
 
     def test_feature_row_serialization(self):
         row = FeatureRow(
             big_rock="MaaS",
-            issue_key="RHAISTRAT-1520",
+            issue_key="RHAISTRAT-2001",
             status="In Progress",
             priority="Major",
             phase="EA1",
@@ -61,7 +61,7 @@ class TestFeatureRow:
         )
         data = row.model_dump()
         assert data["big_rock"] == "MaaS"
-        assert data["issue_key"] == "RHAISTRAT-1520"
+        assert data["issue_key"] == "RHAISTRAT-2001"
         assert data["status"] == "In Progress"
         assert data["priority"] == "Major"
         assert data["phase"] == "EA1"
@@ -159,10 +159,10 @@ class TestRockSummary:
             pillar="Agents",
             state="new for 3.5",
             owner="Morgan Lee",
-            outcome_keys=["RHAISTRAT-9002", "RHAISTRAT-1313"],
+            outcome_keys=["RHAISTRAT-9002", "RHAISTRAT-9003"],
             outcome_descriptions={
                 "RHAISTRAT-9002": "Description 1",
-                "RHAISTRAT-1313": "Description 2",
+                "RHAISTRAT-9003": "Description 2",
             },
             feature_count=4,
             rfe_count=1,
@@ -194,7 +194,7 @@ class TestCandidateResponse:
     def _make_response(self) -> CandidateResponse:
         return CandidateResponse(
             version="3.5",
-            jira_base_url="https://redhat.atlassian.net/browse",
+            jira_base_url="https://jira.example.com/browse",
             last_refreshed=datetime(2026, 4, 21, 14, 30, 0, tzinfo=timezone.utc),
             demo_mode=False,
             summary=SummaryStats(
@@ -225,7 +225,7 @@ class TestCandidateResponse:
             features=[
                 FeatureRow(
                     big_rock="MaaS",
-                    issue_key="RHAISTRAT-1520",
+                    issue_key="RHAISTRAT-2001",
                     status="In Progress",
                     priority="Major",
                     phase="EA1",
@@ -272,7 +272,7 @@ class TestCandidateResponse:
         resp = self._make_response()
         data = resp.model_dump()
         assert data["version"] == "3.5"
-        assert data["jira_base_url"] == "https://redhat.atlassian.net/browse"
+        assert data["jira_base_url"] == "https://jira.example.com/browse"
         assert "summary" in data
         assert data["summary"]["total_features"] == 2
         assert data["summary"]["total_rfes"] == 1

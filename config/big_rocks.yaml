@@ -1,4 +1,7 @@
 # config/big_rocks.yaml
+#
+# Replace the RHAISTRAT-90xx placeholder keys below with your real
+# Jira Outcome issue keys before querying Jira.
 release: "3.5"
 
 big_rocks:
@@ -7,20 +10,18 @@ big_rocks:
     full_name: "MaaS (continue from 3.4)"
     pillar: "Inference"
     state: "continue from 3.4"
-    owner: "Pat Johnson"
+    owner: ""
     outcome_keys:
       - "RHAISTRAT-9001"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9001"
 
   - priority: 2
     name: "Gen AI Studio"
     full_name: "Gen AI Studio / Prompt Lab (continue from 3.4)"
     pillar: "Agents"
     state: "continue from 3.4"
-    owner: "Morgan Lee"
+    owner: ""
     outcome_keys:
       - "RHAISTRAT-9002"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9002"
 
   - priority: 3
     name: "BYO Agent"
@@ -45,11 +46,10 @@ big_rocks:
     full_name: "Llm-d / llm-d on xKS (continue from 3.4)"
     pillar: "Inference"
     state: "continue from 3.4"
-    owner: "Alex Rivera"
+    owner: ""
     outcome_keys:
       - "RHAISTRAT-9003"
       - "RHAISTRAT-9004"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9003"
 
   - priority: 6
     name: "Upgrade Support"
@@ -59,38 +59,34 @@ big_rocks:
     owner: ""
     outcome_keys:
       - "RHAISTRAT-9005"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9005"
 
   - priority: 7
     name: "Eval Hub"
     full_name: "Eval Hub (continue from 3.4)"
     pillar: "Data"
     state: "continue from 3.4"
-    owner: "Jordan Taylor"
+    owner: ""
     outcome_keys:
       - "RHAISTRAT-9006"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9006"
 
   - priority: 8
     name: "AI Hub incl MCP"
     full_name: "AI Hub including MCP catalog & registry (continue from 3.4)"
     pillar: "Platform"
     state: "continue from 3.4"
-    owner: "Casey Martin"
+    owner: ""
     outcome_keys:
       - "RHAISTRAT-9007"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9007"
 
   - priority: 9
     name: "Observability"
     full_name: "Observability (continue from 3.4)"
     pillar: "Platform"
     state: "continue from 3.4"
-    owner: "Pat Johnson"
+    owner: ""
     outcome_keys:
       - "RHAISTRAT-9008"
       - "RHAISTRAT-9009"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9008"
 
   - priority: 10
     name: "Multitenancy"
@@ -101,17 +97,15 @@ big_rocks:
     outcome_keys:
       - "RHAISTRAT-9010"
       - "RHAISTRAT-9011"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9010"
 
   - priority: 11
     name: "AutoRAG"
     full_name: "AutoRAG (continue from 3.4)"
     pillar: "Data"
     state: "continue from 3.4"
-    owner: "Sam Patel"
+    owner: ""
     outcome_keys:
       - "RHAISTRAT-9012"
-    outcome_url: "https://redhat.atlassian.net/browse/RHAISTRAT-9012"
 
   - priority: 12
     name: "AI Safety"
