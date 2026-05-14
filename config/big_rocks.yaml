@@ -29,8 +29,12 @@ big_rocks:
     pillar: "Agents"
     state: "continue from 3.4"
     owner: ""
-    outcome_keys: []
-    notes: "Outcome TBD per Big Rocks document"
+    outcome_keys:
+      - "RHAISTRAT-155"
+      - "RHAISTRAT-1211"
+      - "RHAISTRAT-1344"
+      - "RHAISTRAT-1349"
+      - "RHAISTRAT-1355"
 
   - priority: 4
     name: "Tool Calling"
@@ -38,8 +42,9 @@ big_rocks:
     pillar: "Agents"
     state: "new for 3.5"
     owner: ""
-    outcome_keys: []
-    notes: "Awaiting Outcome key assignment"
+    outcome_keys:
+      - "RHAISTRAT-1357"
+      - "RHAISTRAT-947"
 
   - priority: 5
     name: "llm-d / xKS"
